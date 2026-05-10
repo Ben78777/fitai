@@ -43,9 +43,8 @@ public class FoodSearchService {
                 .queryParam("query", normalized)
                 .queryParam("api_key", usdaApiKey)
                 // Fetch extra so we still have MAX_RESULTS after filtering incomplete entries
-                .queryParam("pageSize", MAX_RESULTS * 2)
-                // Branded covers packaged foods; SR Legacy + Foundation cover whole/raw foods
-                .queryParam("dataType", "Branded,SR Legacy,Foundation")
+                .queryParam("pageSize", MAX_RESULTS)
+                .queryParam("dataType", "Foundation,SR Legacy")
                 .toUriString();
 
         List<FoodSearchResult> results = new ArrayList<>();
