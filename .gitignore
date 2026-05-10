@@ -1,0 +1,25 @@
+# ── Secrets — never commit these ──────────────────────────────────────────────
+backend/src/main/resources/application-dev.properties
+frontend/.env
+frontend/.env.local
+
+# ── Java / Maven ──────────────────────────────────────────────────────────────
+backend/target/
+backend/.mvn/wrapper/dists/
+*.class
+*.jar
+*.war
+
+# ── Node / frontend ───────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+
+# ── OS / editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/
+
+# Claude Code session data
+.claude/
