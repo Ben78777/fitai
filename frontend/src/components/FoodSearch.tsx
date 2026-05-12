@@ -70,7 +70,9 @@ export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) 
     debounceRef.current = setTimeout(async () => {
       setSearching(true); setError(''); setSelected(null);
       try {
-        const data = await searchFood(trimmed);
+        // Prefix "100g" so API Ninjas treats it as a quantity-based query
+        // and returns actual nutritional data (bare food names return empty results)
+        const data = await searchFood(`100g ${trimmed}`);
         setResults(data);
         setHasSearched(true);
         if (data.length === 0) setError('No results found. Try a different term.');

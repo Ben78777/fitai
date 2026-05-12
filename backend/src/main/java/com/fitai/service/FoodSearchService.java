@@ -74,6 +74,11 @@ public class FoodSearchService {
 
         log.info("API Ninjas responded {} for '{}'", response.getStatusCode(), normalized);
 
+        // Log a snippet of the raw body so we can diagnose response format issues
+        String body = response.getBody();
+        log.info("API Ninjas raw response (first 300 chars): {}",
+                body != null && body.length() > 300 ? body.substring(0, 300) : body);
+
         List<FoodSearchResult> results = new ArrayList<>();
         try {
             JsonNode items = objectMapper.readTree(response.getBody());
