@@ -2,6 +2,7 @@ package com.fitai.controller;
 
 import com.fitai.dto.response.FoodSearchResult;
 import com.fitai.service.FoodSearchService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,7 +20,12 @@ public class FoodSearchController {
 
     @GetMapping("/search")
     public ResponseEntity<List<FoodSearchResult>> search(@RequestParam String q) {
-        List<FoodSearchResult> results = foodSearchService.search(q);
-        return ResponseEntity.ok(results);
+        try {
+            List<FoodSearchResult> results = foodSearchService.search(q);
+            return ResponseEntity.ok(results);
+        } catch (Exception e) {
+            // Upstream failure (bad API key, network, etc.) — tell the frontend explicitly
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).build();
+        }
     }
 }

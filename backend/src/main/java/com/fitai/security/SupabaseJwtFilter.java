@@ -39,8 +39,10 @@ public class SupabaseJwtFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        // Let CORS preflight pass through without authentication
-        return "OPTIONS".equalsIgnoreCase(request.getMethod());
+        String path = request.getRequestURI();
+        // Skip auth for CORS preflight and the liveness probe
+        return "OPTIONS".equalsIgnoreCase(request.getMethod())
+                || "/health".equals(path);
     }
 
     @Override

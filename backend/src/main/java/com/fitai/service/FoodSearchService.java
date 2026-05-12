@@ -37,10 +37,20 @@ public class FoodSearchService {
         this.apiNinjasKey = apiNinjasKey;
     }
 
+    public boolean isKeyConfigured() {
+        return apiNinjasKey != null && !apiNinjasKey.isBlank();
+    }
+
+    /**
+     * Calls the API Ninjas nutrition endpoint.
+     * Throws RuntimeException if the upstream call fails — callers should
+     * surface this as a 502 so the frontend distinguishes a real error from
+     * a genuine "no results" empty list.
+     */
     public List<FoodSearchResult> search(String query) {
         String normalized = query.trim().replaceAll("\\s+", " ");
 
-        // Build URI object — avoids double-encoding when passed to RestTemplate
+        // Build a URI object — avoids RestTemplate double-encoding the query string
         URI uri = UriComponentsBuilder.fromHttpUrl(API_NINJAS_URL)
                 .queryParam("query", normalized)
                 .build()
@@ -51,14 +61,21 @@ public class FoodSearchService {
         headers.set("X-Api-Key", apiNinjasKey);
         HttpEntity<Void> request = new HttpEntity<>(headers);
 
-        List<FoodSearchResult> results = new ArrayList<>();
+        log.info("Calling API Ninjas for query: '{}'", normalized);
 
+        ResponseEntity<String> response;
         try {
-            ResponseEntity<String> response = restTemplate.exchange(
-                    uri, HttpMethod.GET, request, String.class);
+            response = restTemplate.exchange(uri, HttpMethod.GET, request, String.class);
+        } catch (Exception e) {
+            // Log the real cause (e.g. 401 invalid key, 429 rate limit, network error)
+            log.error("API Ninjas call failed for '{}': {} — {}", normalized, e.getClass().getSimpleName(), e.getMessage());
+            throw new RuntimeException("Food search upstream error: " + e.getMessage(), e);
+        }
 
-            log.debug("API Ninjas responded {} for query '{}'", response.getStatusCode(), normalized);
+        log.info("API Ninjas responded {} for '{}'", response.getStatusCode(), normalized);
 
+        List<FoodSearchResult> results = new ArrayList<>();
+        try {
             JsonNode items = objectMapper.readTree(response.getBody());
 
             for (JsonNode item : items) {
@@ -86,14 +103,12 @@ public class FoodSearchService {
                         calPer100g, proteinPer100g, carbsPer100g, fatPer100g,
                         servingG));
             }
-
-            log.debug("Returning {} results for query '{}'", results.size(), normalized);
-
         } catch (Exception e) {
-            // Log the real error so it shows up in Render logs
-            log.error("Food search failed for query '{}': {}", normalized, e.getMessage(), e);
+            log.error("Failed to parse API Ninjas response for '{}': {}", normalized, e.getMessage());
+            throw new RuntimeException("Failed to parse food search response", e);
         }
 
+        log.info("Returning {} results for '{}'", results.size(), normalized);
         return results;
     }
 
