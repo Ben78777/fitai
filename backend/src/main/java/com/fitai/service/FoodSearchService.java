@@ -43,8 +43,8 @@ public class FoodSearchService {
                 .queryParam("query", normalized)
                 .queryParam("api_key", usdaApiKey)
                 // Fetch extra so we still have MAX_RESULTS after filtering incomplete entries
-                .queryParam("pageSize", MAX_RESULTS)
-                .queryParam("dataType", "Foundation,SR Legacy")
+                .queryParam("pageSize", 20)
+                .queryParam("dataType", "Branded")
                 .toUriString();
 
         List<FoodSearchResult> results = new ArrayList<>();
