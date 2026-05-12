@@ -3,6 +3,8 @@ package com.fitai.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fitai.dto.response.FoodSearchResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -12,12 +14,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
 @Service
 public class FoodSearchService {
 
+    private static final Logger log = LoggerFactory.getLogger(FoodSearchService.class);
     private static final String API_NINJAS_URL = "https://api.api-ninjas.com/v1/nutrition";
     private static final int MAX_RESULTS = 15;
 
@@ -34,12 +38,13 @@ public class FoodSearchService {
     }
 
     public List<FoodSearchResult> search(String query) {
-        // Normalize input
         String normalized = query.trim().replaceAll("\\s+", " ");
 
-        String url = UriComponentsBuilder.fromHttpUrl(API_NINJAS_URL)
+        // Build URI object — avoids double-encoding when passed to RestTemplate
+        URI uri = UriComponentsBuilder.fromHttpUrl(API_NINJAS_URL)
                 .queryParam("query", normalized)
-                .toUriString();
+                .build()
+                .toUri();
 
         // API Ninjas requires the key in the request header
         HttpHeaders headers = new HttpHeaders();
@@ -50,28 +55,30 @@ public class FoodSearchService {
 
         try {
             ResponseEntity<String> response = restTemplate.exchange(
-                    url, HttpMethod.GET, request, String.class);
+                    uri, HttpMethod.GET, request, String.class);
+
+            log.debug("API Ninjas responded {} for query '{}'", response.getStatusCode(), normalized);
 
             JsonNode items = objectMapper.readTree(response.getBody());
 
             for (JsonNode item : items) {
                 if (results.size() >= MAX_RESULTS) break;
 
-                String name        = item.path("name").asText("").trim();
-                double servingG    = item.path("serving_size_g").asDouble(100);
-                double calories    = item.path("calories").asDouble(0);
-                double protein     = item.path("protein_g").asDouble(0);
-                double carbs       = item.path("carbohydrates_total_g").asDouble(0);
-                double fat         = item.path("fat_total_g").asDouble(0);
+                String name     = item.path("name").asText("").trim();
+                double servingG = item.path("serving_size_g").asDouble(100);
+                double calories = item.path("calories").asDouble(0);
+                double protein  = item.path("protein_g").asDouble(0);
+                double carbs    = item.path("carbohydrates_total_g").asDouble(0);
+                double fat      = item.path("fat_total_g").asDouble(0);
 
                 if (name.isEmpty() || calories == 0) continue;
 
                 // Normalize to per-100g so Mode 1 (pick + enter grams) works correctly
-                double factor          = 100.0 / servingG;
-                double calPer100g      = round(calories * factor);
-                double proteinPer100g  = round(protein  * factor);
-                double carbsPer100g    = round(carbs    * factor);
-                double fatPer100g      = round(fat      * factor);
+                double factor         = 100.0 / servingG;
+                double calPer100g     = round(calories * factor);
+                double proteinPer100g = round(protein  * factor);
+                double carbsPer100g   = round(carbs    * factor);
+                double fatPer100g     = round(fat      * factor);
 
                 // Keep servingSizeG so Mode 2 (free-text totals) can recover actual amounts
                 results.add(new FoodSearchResult(
@@ -79,8 +86,12 @@ public class FoodSearchService {
                         calPer100g, proteinPer100g, carbsPer100g, fatPer100g,
                         servingG));
             }
+
+            log.debug("Returning {} results for query '{}'", results.size(), normalized);
+
         } catch (Exception e) {
-            // Return whatever partial results we have — don't crash on upstream issues
+            // Log the real error so it shows up in Render logs
+            log.error("Food search failed for query '{}': {}", normalized, e.getMessage(), e);
         }
 
         return results;
