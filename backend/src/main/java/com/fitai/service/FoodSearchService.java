@@ -9,7 +9,6 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -39,19 +38,16 @@ public class FoodSearchService {
     public List<FoodSearchResult> search(String query) {
         // Normalize: collapse extra spaces and lowercase
         String normalized = query.trim().replaceAll("\\s+", " ").toLowerCase();
-        String[] queryWords = normalized.split(" ");
 
         String url = UriComponentsBuilder.fromHttpUrl(USDA_SEARCH_URL)
                 .queryParam("query", normalized)
                 .queryParam("api_key", usdaApiKey)
-                // Fetch a large pool so we can re-rank and still have MAX_RESULTS after filtering
-                .queryParam("pageSize", 100)
+                // Fetch extra so we still reach MAX_RESULTS after filtering incomplete entries
+                .queryParam("pageSize", 50)
                 .queryParam("dataType", "Branded")
                 .toUriString();
 
-        // Scored candidates before final sort
-        record Candidate(FoodSearchResult result, int score) {}
-        List<Candidate> candidates = new ArrayList<>();
+        List<FoodSearchResult> results = new ArrayList<>();
 
         try {
             String json = restTemplate.getForObject(url, String.class);
@@ -59,6 +55,8 @@ public class FoodSearchService {
             JsonNode foods = root.path("foods");
 
             for (JsonNode food : foods) {
+                if (results.size() >= MAX_RESULTS) break;
+
                 String name  = food.path("description").asText("").trim();
                 String brand = food.path("brandName").asText("").trim();
                 if (name.isEmpty()) continue;
@@ -71,40 +69,17 @@ public class FoodSearchService {
                 // Skip entries missing any macro
                 if (kcal == null || protein == null || carbs == null || fat == null) continue;
 
-                String nameLower = name.toLowerCase();
-
-                // Score by relevance: higher = more relevant
-                int score = 0;
-                // All query words present in description
-                int wordsMatched = 0;
-                for (String word : queryWords) {
-                    if (nameLower.contains(word)) wordsMatched++;
-                }
-                score += wordsMatched * 10;
-                // Bonus if description starts with the query (e.g. "CHICKEN BREAST, ...")
-                if (nameLower.startsWith(normalized)) score += 30;
-                // Bonus if exact phrase is anywhere in description
-                else if (nameLower.contains(normalized)) score += 15;
-                // Prefer shorter descriptions — they tend to be simpler, more generic foods
-                score -= name.length() / 10;
-
                 // Convert ALL-CAPS USDA descriptions to Title Case for readability
                 String displayName = toTitleCase(name);
                 if (!brand.isEmpty()) displayName += " (" + toTitleCase(brand) + ")";
 
-                candidates.add(new Candidate(
-                        new FoodSearchResult(displayName, kcal, protein, carbs, fat), score));
+                results.add(new FoodSearchResult(displayName, kcal, protein, carbs, fat));
             }
         } catch (Exception e) {
             // Return whatever partial results we have — don't crash on upstream issues
         }
 
-        // Sort by score descending, then take top MAX_RESULTS
-        return candidates.stream()
-                .sorted(Comparator.comparingInt(Candidate::score).reversed())
-                .limit(MAX_RESULTS)
-                .map(Candidate::result)
-                .toList();
+        return results;
     }
 
     /** Converts "CHICKEN BREAST, COOKED" → "Chicken Breast, Cooked" */
