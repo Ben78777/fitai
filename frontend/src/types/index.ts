@@ -4,6 +4,8 @@ export interface FoodSearchResult {
   proteinPer100g: number;
   carbsPer100g: number;
   fatPer100g: number;
+  // Actual serving size from API Ninjas — used by free-text mode to recover real totals
+  servingSizeG: number;
 }
 
 export interface LogEntry {
