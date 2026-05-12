@@ -44,7 +44,8 @@ public class FoodSearchService {
                 .queryParam("api_key", usdaApiKey)
                 // Fetch extra so we still reach MAX_RESULTS after filtering incomplete entries
                 .queryParam("pageSize", 50)
-                .queryParam("dataType", "Branded")
+                // Match USDA website: search all types so Foundation/SR Legacy results appear first
+                .queryParam("dataType", "Foundation,SR Legacy,Branded")
                 .toUriString();
 
         List<FoodSearchResult> results = new ArrayList<>();
@@ -66,8 +67,11 @@ public class FoodSearchService {
                 Double carbs   = extractNutrient(food, NUTRIENT_CARBS);
                 Double fat     = extractNutrient(food, NUTRIENT_FAT);
 
-                // Skip entries missing any macro
-                if (kcal == null || protein == null || carbs == null || fat == null) continue;
+                // Must have calories — protein/carbs/fat default to 0 if missing
+                if (kcal == null) continue;
+                if (protein == null) protein = 0.0;
+                if (carbs == null)   carbs   = 0.0;
+                if (fat == null)     fat     = 0.0;
 
                 // Convert ALL-CAPS USDA descriptions to Title Case for readability
                 String displayName = toTitleCase(name);
