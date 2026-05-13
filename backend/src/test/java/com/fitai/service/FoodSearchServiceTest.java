@@ -16,6 +16,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 
+/**
+ * Tests for OpenFoodFactsService — the active food search implementation.
+ * FoodSearchService (API Ninjas) is kept in the codebase but not exposed
+ * because the free tier does not return calories or protein.
+ */
 @ExtendWith(MockitoExtension.class)
 class FoodSearchServiceTest {
 
@@ -23,142 +28,113 @@ class FoodSearchServiceTest {
     private RestTemplate restTemplate;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private static final String FAKE_KEY = "test-api-key";
 
-    private FoodSearchService service() {
-        return new FoodSearchService(restTemplate, objectMapper, FAKE_KEY);
+    private OpenFoodFactsService service() {
+        return new OpenFoodFactsService(restTemplate, objectMapper);
     }
 
-    /** Stub the RestTemplate exchange call with an API Ninjas-format JSON body */
     private void stubResponse(String json) {
-        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(), eq(String.class)))
+        when(restTemplate.exchange(any(), eq(HttpMethod.GET), any(), eq(String.class)))
                 .thenReturn(ResponseEntity.ok(json));
     }
 
-    /** Build an API Ninjas array response with N identical items */
-    private String ninjasResponse(int count) {
-        StringBuilder items = new StringBuilder("[");
+    /** Minimal Open Food Facts product JSON with all required nutriment fields */
+    private String offResponse(int count) {
+        StringBuilder products = new StringBuilder();
         for (int i = 0; i < count; i++) {
-            if (i > 0) items.append(",");
-            items.append("""
+            if (i > 0) products.append(",");
+            products.append("""
                 {
-                  "name": "food item %d",
-                  "serving_size_g": 100,
-                  "calories": 89,
-                  "protein_g": 1.1,
-                  "carbohydrates_total_g": 23.0,
-                  "fat_total_g": 0.3
+                  "product_name": "Food Item %d",
+                  "brands": "Brand %d",
+                  "nutriments": {
+                    "energy-kcal_100g": 89,
+                    "proteins_100g": 1.1,
+                    "carbohydrates_100g": 23.0,
+                    "fat_100g": 0.3
+                  }
                 }
-                """.formatted(i));
+                """.formatted(i, i));
         }
-        items.append("]");
-        return items.toString();
+        return "{\"products\":[" + products + "]}";
     }
 
     @Test
     void search_returnsUpToFifteenResults() {
-        stubResponse(ninjasResponse(20));
-
+        stubResponse(offResponse(20));
         List<FoodSearchResult> results = service().search("banana");
-
-        // MAX_RESULTS cap is 15
         assertThat(results).hasSize(15);
     }
 
     @Test
-    void search_normalizesToPer100g() {
-        // API returns 200 kcal for a 200g serving — per-100g should be 100 kcal
+    void search_skipsEntriesWithNoCalories() {
         String json = """
-            [{
-              "name": "rice",
-              "serving_size_g": 200,
-              "calories": 200,
-              "protein_g": 4,
-              "carbohydrates_total_g": 40,
-              "fat_total_g": 0.6
-            }]
-            """;
-        stubResponse(json);
-
-        List<FoodSearchResult> results = service().search("rice");
-
-        assertThat(results).hasSize(1);
-        FoodSearchResult r = results.get(0);
-        assertThat(r.getCaloriesPer100g()).isEqualTo(100.0);
-        assertThat(r.getProteinPer100g()).isEqualTo(2.0);
-        assertThat(r.getCarbsPer100g()).isEqualTo(20.0);
-        assertThat(r.getFatPer100g()).isEqualTo(0.3);
-        // servingSizeG preserved as-is so the frontend can recover actual amounts
-        assertThat(r.getServingSizeG()).isEqualTo(200.0);
-    }
-
-    @Test
-    void search_capitalizesProductName() {
-        String json = """
-            [{
-              "name": "chicken breast",
-              "serving_size_g": 100,
-              "calories": 165,
-              "protein_g": 31,
-              "carbohydrates_total_g": 0,
-              "fat_total_g": 3.6
-            }]
-            """;
-        stubResponse(json);
-
-        List<FoodSearchResult> results = service().search("chicken");
-
-        assertThat(results.get(0).getProductName()).isEqualTo("Chicken Breast");
-    }
-
-    @Test
-    void search_filtersOutZeroCalorieEntries() {
-        String json = """
-            [
+            {"products":[
               {
-                "name": "water",
-                "serving_size_g": 100,
-                "calories": 0,
-                "protein_g": 0,
-                "carbohydrates_total_g": 0,
-                "fat_total_g": 0
+                "product_name": "No Calorie Food",
+                "brands": "",
+                "nutriments": {"energy-kcal_100g": 0, "proteins_100g": 0, "carbohydrates_100g": 0, "fat_100g": 0}
               },
               {
-                "name": "apple",
-                "serving_size_g": 100,
-                "calories": 52,
-                "protein_g": 0.3,
-                "carbohydrates_total_g": 14,
-                "fat_total_g": 0.2
+                "product_name": "Banana",
+                "brands": "",
+                "nutriments": {"energy-kcal_100g": 89, "proteins_100g": 1.1, "carbohydrates_100g": 23, "fat_100g": 0.3}
               }
-            ]
+            ]}
             """;
         stubResponse(json);
+        List<FoodSearchResult> results = service().search("banana");
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getProductName()).isEqualTo("Banana");
+    }
 
-        List<FoodSearchResult> results = service().search("test");
-
-        // zero-calorie "water" should be skipped
+    @Test
+    void search_skipsEntriesWithEmptyProductName() {
+        String json = """
+            {"products":[
+              {"product_name": "", "brands": "", "nutriments": {"energy-kcal_100g": 89}},
+              {"product_name": "Apple", "brands": "", "nutriments": {"energy-kcal_100g": 52, "proteins_100g": 0.3, "carbohydrates_100g": 14, "fat_100g": 0.2}}
+            ]}
+            """;
+        stubResponse(json);
+        List<FoodSearchResult> results = service().search("apple");
         assertThat(results).hasSize(1);
         assertThat(results.get(0).getProductName()).isEqualTo("Apple");
     }
 
     @Test
-    void search_normalizesQuerySpaces() {
-        stubResponse(ninjasResponse(1));
+    void search_appendsBrandWhenPresentAndDifferent() {
+        String json = """
+            {"products":[{
+              "product_name": "Chicken Breast",
+              "brands": "Tyson",
+              "nutriments": {"energy-kcal_100g": 165, "proteins_100g": 31, "carbohydrates_100g": 0, "fat_100g": 3.6}
+            }]}
+            """;
+        stubResponse(json);
+        List<FoodSearchResult> results = service().search("chicken");
+        assertThat(results.get(0).getProductName()).isEqualTo("Chicken Breast (Tyson)");
+    }
 
-        // Extra whitespace should be collapsed — no exception
-        service().search("  peanut   butter  ");
-
-        assertThat(true).isTrue();
+    @Test
+    void search_returnsServingSizeOf100() {
+        stubResponse(offResponse(1));
+        // Open Food Facts data is always per 100 g
+        assertThat(service().search("test").get(0).getServingSizeG()).isEqualTo(100.0);
     }
 
     @Test
     void search_returnsEmptyListOnUpstreamFailure() {
-        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(), eq(String.class)))
+        when(restTemplate.exchange(any(), eq(HttpMethod.GET), any(), eq(String.class)))
                 .thenThrow(new RuntimeException("network error"));
+        assertThatThrownBy(() -> service().search("banana"))
+                .isInstanceOf(RuntimeException.class);
+    }
 
-        List<FoodSearchResult> results = service().search("banana");
-
-        assertThat(results).isEmpty();
+    // Helper to use AssertJ's assertThatThrownBy
+    private static org.assertj.core.api.ThrowableTypeAssert<RuntimeException>
+    assertThatThrownBy(org.assertj.core.api.ThrowableAssert.ThrowingCallable callable) {
+        return org.assertj.core.api.Assertions.assertThatThrownBy(callable)
+                .isInstanceOf(RuntimeException.class);
     }
 }

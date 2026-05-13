@@ -9,21 +9,8 @@ interface Props {
   onClose: () => void;
 }
 
-type Mode = 'search' | 'freetext';
+type Mode = 'search' | 'manual';
 
-// Recover the actual macros for a single API item from its real serving size
-function itemActualMacros(item: FoodSearchResult) {
-  const f = item.servingSizeG / 100;
-  const r = (n: number) => Math.round(n * 10) / 10;
-  return {
-    calories: r(item.caloriesPer100g * f),
-    proteinG: r(item.proteinPer100g  * f),
-    carbsG:   r(item.carbsPer100g    * f),
-    fatG:     r(item.fatPer100g      * f),
-  };
-}
-
-// Scale per-100g macros by user-entered grams (Mode 1)
 function calcMacros(food: FoodSearchResult, grams: number) {
   const f = grams / 100;
   const r = (n: number) => Math.round(n * 10) / 10;
@@ -38,22 +25,25 @@ function calcMacros(food: FoodSearchResult, grams: number) {
 export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) {
   const [mode, setMode] = useState<Mode>('search');
 
-  // ── Mode 1 (Search) state ──────────────────────────────────────
+  // ── Mode 1 (Search) ────────────────────────────────────────────
   const [query, setQuery]       = useState('');
   const [results, setResults]   = useState<FoodSearchResult[]>([]);
   const [selected, setSelected] = useState<FoodSearchResult | null>(null);
   const [quantity, setQuantity] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
 
-  // ── Mode 2 (Free Text) state ───────────────────────────────────
-  const [ftQuery, setFtQuery]     = useState('');
-  const [ftResults, setFtResults] = useState<FoodSearchResult[]>([]);
-  const [ftHasSearched, setFtHasSearched] = useState(false);
+  // ── Mode 2 (Manual Entry) ──────────────────────────────────────
+  const [manualName,     setManualName]     = useState('');
+  const [manualCalories, setManualCalories] = useState('');
+  const [manualProtein,  setManualProtein]  = useState('');
+  const [manualCarbs,    setManualCarbs]    = useState('');
+  const [manualFat,      setManualFat]      = useState('');
+  const [manualServing,  setManualServing]  = useState('');
 
-  // ── Shared state ───────────────────────────────────────────────
+  // ── Shared ─────────────────────────────────────────────────────
   const [searching, setSearching] = useState(false);
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState('');
+  const [saving,    setSaving]    = useState(false);
+  const [error,     setError]     = useState('');
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef    = useRef<HTMLInputElement>(null);
@@ -70,59 +60,24 @@ export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) 
     debounceRef.current = setTimeout(async () => {
       setSearching(true); setError(''); setSelected(null);
       try {
-        // Prefix "100g" so API Ninjas treats it as a quantity-based query
-        // and returns actual nutritional data (bare food names return empty results)
-        const data = await searchFood(`100g ${trimmed}`);
+        const data = await searchFood(trimmed);
         setResults(data);
         setHasSearched(true);
         if (data.length === 0) setError('No results found. Try a different term.');
-      } catch { setError('Search failed. Check your connection.'); }
-      finally { setSearching(false); }
+      } catch {
+        setError('Search failed. Check your connection and try again.');
+      } finally {
+        setSearching(false);
+      }
     }, 400);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query, mode]);
 
-  // Debounced live search — Mode 2
-  useEffect(() => {
-    if (mode !== 'freetext') return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    const trimmed = ftQuery.trim();
-    if (!trimmed) { setFtResults([]); setFtHasSearched(false); setError(''); return; }
-
-    debounceRef.current = setTimeout(async () => {
-      setSearching(true); setError('');
-      try {
-        const data = await searchFood(trimmed);
-        setFtResults(data);
-        setFtHasSearched(true);
-        if (data.length === 0) setError('No foods recognised. Try rephrasing (include amounts like "200g").');
-      } catch { setError('Search failed. Check your connection.'); }
-      finally { setSearching(false); }
-    }, 600);
-
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [ftQuery, mode]);
-
-  // Sum all free-text items into one total row
-  const ftTotals = ftResults.reduce(
-    (acc, item) => {
-      const m = itemActualMacros(item);
-      const r = (n: number) => Math.round(n * 10) / 10;
-      return {
-        calories: r(acc.calories + m.calories),
-        proteinG: r(acc.proteinG + m.proteinG),
-        carbsG:   r(acc.carbsG   + m.carbsG),
-        fatG:     r(acc.fatG     + m.fatG),
-      };
-    },
-    { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 }
-  );
-
-  // ── Add handlers ───────────────────────────────────────────────
+  // ── Handlers ───────────────────────────────────────────────────
 
   async function handleAdd() {
-    if (!selected || !quantity) return;
+    if (!selected) return;
     const grams = parseFloat(quantity);
     if (isNaN(grams) || grams <= 0) { setError('Enter a valid quantity in grams.'); return; }
     setSaving(true); setError('');
@@ -130,31 +85,43 @@ export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) 
       const macros = calcMacros(selected, grams);
       await addLogEntry({ date, mealType, foodName: selected.productName, quantityG: grams, ...macros });
       onAdded(); onClose();
-    } catch { setError('Failed to save. Please try again.'); }
-    finally { setSaving(false); }
+    } catch {
+      setError('Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  async function handleFtAdd() {
-    if (ftResults.length === 0) return;
+  async function handleManualAdd() {
+    const cal = parseFloat(manualCalories);
+    if (!manualName.trim() || isNaN(cal) || cal <= 0) {
+      setError('Food name and calories are required.');
+      return;
+    }
     setSaving(true); setError('');
     try {
-      const totalG = Math.round(ftResults.reduce((s, i) => s + i.servingSizeG, 0) * 10) / 10;
       await addLogEntry({
-        date, mealType,
-        foodName: ftQuery.trim(),
-        quantityG: totalG,
-        ...ftTotals,
+        date,
+        mealType,
+        foodName: manualName.trim(),
+        quantityG: parseFloat(manualServing) || 0,
+        calories:  cal,
+        proteinG:  parseFloat(manualProtein)  || 0,
+        carbsG:    parseFloat(manualCarbs)    || 0,
+        fatG:      parseFloat(manualFat)      || 0,
       });
       onAdded(); onClose();
-    } catch { setError('Failed to save. Please try again.'); }
-    finally { setSaving(false); }
+    } catch {
+      setError('Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   function switchMode(next: Mode) {
     setMode(next);
     setError(''); setSearching(false);
-    if (next === 'search') { setFtResults([]); setFtHasSearched(false); }
-    else { setResults([]); setSelected(null); setQuantity(''); setHasSearched(false); }
+    if (next === 'search') { setResults([]); setSelected(null); setQuantity(''); setHasSearched(false); }
     setTimeout(() => inputRef.current?.focus(), 0);
   }
 
@@ -177,7 +144,7 @@ export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) 
 
         {/* Mode tabs */}
         <div className="flex rounded-lg border border-gray-200 mb-4 overflow-hidden">
-          {(['search', 'freetext'] as Mode[]).map((m) => (
+          {([['search', '🔍 Search'], ['manual', '✏️ Manual Entry']] as [Mode, string][]).map(([m, label]) => (
             <button
               key={m}
               onClick={() => switchMode(m)}
@@ -185,7 +152,7 @@ export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) 
                 mode === m ? 'bg-green-500 text-white' : 'text-gray-600 hover:bg-gray-50'
               }`}
             >
-              {m === 'search' ? '🔍 Search' : '📝 Free Text'}
+              {label}
             </button>
           ))}
         </div>
@@ -237,7 +204,9 @@ export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) 
             )}
 
             {!selected && !searching && !hasSearched && !query && (
-              <p className="text-center text-gray-400 text-sm py-6">Start typing to search the food database</p>
+              <p className="text-center text-gray-400 text-sm py-6">
+                Start typing to search millions of foods
+              </p>
             )}
 
             {/* Quantity panel */}
@@ -299,95 +268,69 @@ export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) 
           </>
         )}
 
-        {/* ══ MODE 2: Free Text ═══════════════════════════════════ */}
-        {mode === 'freetext' && (
-          <>
-            <div className="relative mb-1">
+        {/* ══ MODE 2: Manual Entry ════════════════════════════════ */}
+        {mode === 'manual' && (
+          <div className="space-y-3">
+            <p className="text-xs text-gray-400">
+              For restaurant meals, home cooking, or anything not in the database — enter the macros yourself.
+            </p>
+
+            {/* Food name */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Food name *</label>
               <input
                 ref={inputRef}
                 type="text"
-                value={ftQuery}
-                onChange={(e) => setFtQuery(e.target.value)}
-                placeholder="e.g. 200g chicken breast with rice and a banana"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                value={manualName}
+                onChange={(e) => setManualName(e.target.value)}
+                placeholder="e.g. Chicken Salad, Homemade Burger…"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
               />
-              {searching && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
-                </div>
-              )}
             </div>
 
-            <p className="text-xs text-gray-400 mb-4">
-              Include quantities for best accuracy — results appear as you type
-            </p>
-
-            {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
-
-            {!ftHasSearched && !searching && !ftQuery && (
-              <p className="text-center text-gray-400 text-sm py-8">
-                Describe your meal and we'll calculate the macros automatically
-              </p>
-            )}
-
-            {/* Results table — shown once we have matches */}
-            {ftResults.length > 0 && (
-              <>
-                <div className="rounded-lg border border-gray-200 overflow-hidden mb-4">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="bg-gray-50 text-gray-500 uppercase tracking-wide">
-                        <th className="text-left px-3 py-2 font-medium">Item</th>
-                        <th className="text-right px-3 py-2 font-medium">Serving</th>
-                        <th className="text-right px-3 py-2 font-medium text-orange-500">Cal</th>
-                        <th className="text-right px-3 py-2 font-medium text-blue-500">Pro</th>
-                        <th className="text-right px-3 py-2 font-medium text-yellow-600">Carb</th>
-                        <th className="text-right px-3 py-2 font-medium text-red-400">Fat</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {ftResults.map((item, i) => {
-                        const m = itemActualMacros(item);
-                        return (
-                          <tr key={i} className="text-gray-700">
-                            <td className="px-3 py-2 text-left">{item.productName}</td>
-                            <td className="px-3 py-2 text-right text-gray-400">{item.servingSizeG}g</td>
-                            <td className="px-3 py-2 text-right font-medium text-orange-500">{m.calories}</td>
-                            <td className="px-3 py-2 text-right text-blue-500">{m.proteinG}g</td>
-                            <td className="px-3 py-2 text-right text-yellow-600">{m.carbsG}g</td>
-                            <td className="px-3 py-2 text-right text-red-400">{m.fatG}g</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    {/* Total row */}
-                    <tfoot>
-                      <tr className="bg-green-50 font-semibold text-gray-800 border-t-2 border-green-200">
-                        <td className="px-3 py-2 text-left">Total</td>
-                        <td className="px-3 py-2 text-right text-gray-400 text-xs font-normal">
-                          {Math.round(ftResults.reduce((s, i) => s + i.servingSizeG, 0))}g
-                        </td>
-                        <td className="px-3 py-2 text-right text-orange-500">{ftTotals.calories}</td>
-                        <td className="px-3 py-2 text-right text-blue-500">{ftTotals.proteinG}g</td>
-                        <td className="px-3 py-2 text-right text-yellow-600">{ftTotals.carbsG}g</td>
-                        <td className="px-3 py-2 text-right text-red-400">{ftTotals.fatG}g</td>
-                      </tr>
-                    </tfoot>
-                  </table>
+            {/* Macro grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Calories (kcal) *', value: manualCalories, setter: setManualCalories, color: 'focus:ring-orange-400', placeholder: 'e.g. 350' },
+                { label: 'Protein (g)',        value: manualProtein,  setter: setManualProtein,  color: 'focus:ring-blue-400',   placeholder: 'e.g. 25' },
+                { label: 'Carbs (g)',          value: manualCarbs,    setter: setManualCarbs,    color: 'focus:ring-yellow-400', placeholder: 'e.g. 30' },
+                { label: 'Fat (g)',            value: manualFat,      setter: setManualFat,      color: 'focus:ring-red-400',    placeholder: 'e.g. 12' },
+              ].map(({ label, value, setter, color, placeholder }) => (
+                <div key={label}>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+                  <input
+                    type="number" min="0" step="any"
+                    value={value}
+                    onChange={(e) => setter(e.target.value)}
+                    placeholder={placeholder}
+                    className={`w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${color}`}
+                  />
                 </div>
+              ))}
+            </div>
 
-                {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+            {/* Serving size (optional) */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Serving size (g) — optional</label>
+              <input
+                type="number" min="0" step="any"
+                value={manualServing}
+                onChange={(e) => setManualServing(e.target.value)}
+                placeholder="e.g. 250"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
 
-                <button
-                  onClick={handleFtAdd}
-                  disabled={saving}
-                  className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
-                >
-                  {saving ? 'Saving…' : `Log meal (${ftTotals.calories} kcal)`}
-                </button>
-              </>
-            )}
-          </>
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+
+            <button
+              onClick={handleManualAdd}
+              disabled={saving || !manualName.trim() || !manualCalories}
+              className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
+            >
+              {saving ? 'Saving…' : 'Add to log'}
+            </button>
+          </div>
         )}
       </div>
     </div>
