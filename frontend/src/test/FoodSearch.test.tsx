@@ -3,7 +3,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import FoodSearch from '../components/FoodSearch';
 
 vi.mock('../lib/api', () => ({
-  searchFood: vi.fn(),
+  analyzeFood: vi.fn(),
   addLogEntry: vi.fn().mockResolvedValue({}),
 }));
 
@@ -11,77 +11,60 @@ vi.mock('../lib/supabase', () => ({
   supabase: { auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null } }) } },
 }));
 
-import { searchFood } from '../lib/api';
-const mockSearch = searchFood as ReturnType<typeof vi.fn>;
+import { analyzeFood } from '../lib/api';
+const mockAnalyze = analyzeFood as ReturnType<typeof vi.fn>;
 
 const mockResults = [
-  { productName: 'Banana', caloriesPer100g: 89, proteinPer100g: 1.1, carbsPer100g: 23, fatPer100g: 0.3 },
-  { productName: 'Apple',  caloriesPer100g: 52, proteinPer100g: 0.3, carbsPer100g: 14, fatPer100g: 0.2 },
+  { foodName: 'Banana',  quantityG: 100, calories: 89,  proteinG: 1.1, carbsG: 23,   fatG: 0.3 },
+  { foodName: 'Chicken', quantityG: 200, calories: 330, proteinG: 62,  carbsG: 0,    fatG: 7.2 },
 ];
 
 describe('FoodSearch', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    mockSearch.mockResolvedValue(mockResults);
+    mockAnalyze.mockResolvedValue(mockResults);
   });
 
   afterEach(() => {
-    vi.useRealTimers();
     vi.clearAllMocks();
   });
 
   it('renders the search input on open', () => {
     render(<FoodSearch mealType="breakfast" date="2026-05-10" onAdded={vi.fn()} onClose={vi.fn()} />);
-    expect(screen.getByPlaceholderText('Type a food name to search…')).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+    expect(screen.getByText('Analyze')).toBeInTheDocument();
   });
 
-  it('shows results after typing once debounce fires', async () => {
+  it('shows results after clicking Analyze', async () => {
     render(<FoodSearch mealType="breakfast" date="2026-05-10" onAdded={vi.fn()} onClose={vi.fn()} />);
-    const input = screen.getByPlaceholderText('Type a food name to search…');
 
-    fireEvent.change(input, { target: { value: 'banana' } });
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'banana' } });
 
-    // Advance timers and flush all pending promises inside act
     await act(async () => {
-      vi.advanceTimersByTime(400);
-      await Promise.resolve(); // flush microtask queue
+      fireEvent.click(screen.getByText('Analyze'));
+      await Promise.resolve();
     });
 
+    expect(mockAnalyze).toHaveBeenCalledWith('banana');
     expect(screen.getByText('Banana')).toBeInTheDocument();
-    expect(screen.getByText('Apple')).toBeInTheDocument();
+    expect(screen.getByText('Chicken')).toBeInTheDocument();
   });
 
-  it('does not fire the API call before 400ms debounce elapses', async () => {
-    render(<FoodSearch mealType="breakfast" date="2026-05-10" onAdded={vi.fn()} onClose={vi.fn()} />);
-    const input = screen.getByPlaceholderText('Type a food name to search…');
-
-    fireEvent.change(input, { target: { value: 'ba' } });
-
-    await act(async () => { vi.advanceTimersByTime(300); }); // not yet
-    expect(mockSearch).not.toHaveBeenCalled();
-
-    await act(async () => {
-      vi.advanceTimersByTime(100); // now 400ms total
-      await Promise.resolve();
-    });
-    expect(mockSearch).toHaveBeenCalledWith('ba');
-  });
-
-  it('shows quantity panel after selecting a result', async () => {
+  it('shows a Log button after results load', async () => {
     render(<FoodSearch mealType="lunch" date="2026-05-10" onAdded={vi.fn()} onClose={vi.fn()} />);
-    const input = screen.getByPlaceholderText('Type a food name to search…');
 
-    fireEvent.change(input, { target: { value: 'banana' } });
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'meal' } });
 
     await act(async () => {
-      vi.advanceTimersByTime(400);
+      fireEvent.click(screen.getByText('Analyze'));
       await Promise.resolve();
     });
 
-    fireEvent.click(screen.getByText('Banana'));
+    expect(screen.getByRole('button', { name: /log/i })).toBeInTheDocument();
+  });
 
-    expect(screen.getByPlaceholderText('e.g. 150')).toBeInTheDocument();
-    expect(screen.getByText('Add to log')).toBeInTheDocument();
+  it('shows empty state prompt before any search', () => {
+    render(<FoodSearch mealType="dinner" date="2026-05-10" onAdded={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText(/Type any food or meal/i)).toBeInTheDocument();
   });
 
   it('calls onClose when backdrop is clicked', () => {
