@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { supabase } from './supabase';
-import type { CreateLogEntryPayload, FoodSearchResult, LogEntry } from '../types';
+import type { CreateLogEntryPayload, FoodAnalysisItem, LogEntry } from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -15,10 +15,8 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-export async function searchFood(query: string): Promise<FoodSearchResult[]> {
-  const { data } = await api.get<FoodSearchResult[]>('/api/v1/food/search', {
-    params: { q: query },
-  });
+export async function analyzeFood(query: string): Promise<FoodAnalysisItem[]> {
+  const { data } = await api.post<FoodAnalysisItem[]>('/api/v1/food/analyze', { query });
   return data;
 }
 

@@ -1,7 +1,9 @@
 package com.fitai.controller;
 
-import com.fitai.dto.response.FoodSearchResult;
-import com.fitai.service.OpenFoodFactsService;
+import com.fitai.dto.request.FoodAnalyzeRequest;
+import com.fitai.dto.response.FoodAnalysisResult;
+import com.fitai.service.GeminiService;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -12,22 +14,22 @@ import java.util.List;
 @RequestMapping("/api/v1/food")
 public class FoodSearchController {
 
-    private final OpenFoodFactsService openFoodFactsService;
+    private final GeminiService geminiService;
 
-    public FoodSearchController(OpenFoodFactsService openFoodFactsService) {
-        this.openFoodFactsService = openFoodFactsService;
+    public FoodSearchController(GeminiService geminiService) {
+        this.geminiService = geminiService;
     }
 
     /**
-     * Search the Open Food Facts database by food name.
-     * Returns per-100g nutrition so the frontend can scale to any quantity.
+     * Analyze any food query — single ingredient or a full meal description.
+     * Gemini returns pre-calculated macros for each identified food item.
      */
-    @GetMapping("/search")
-    public ResponseEntity<List<FoodSearchResult>> search(@RequestParam String q) {
+    @PostMapping("/analyze")
+    public ResponseEntity<List<FoodAnalysisResult>> analyze(
+            @Valid @RequestBody FoodAnalyzeRequest request) {
         try {
-            return ResponseEntity.ok(openFoodFactsService.search(q));
+            return ResponseEntity.ok(geminiService.analyze(request.getQuery()));
         } catch (Exception e) {
-            // Upstream failure (network, parse error) — tell the frontend explicitly
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).build();
         }
     }

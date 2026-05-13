@@ -1,7 +1,7 @@
 package com.fitai.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fitai.dto.response.FoodSearchResult;
+import com.fitai.dto.response.FoodAnalysisResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -13,14 +13,10 @@ import org.springframework.web.client.RestTemplate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 
-/**
- * Tests for OpenFoodFactsService — the active food search implementation.
- * FoodSearchService (API Ninjas) is kept in the codebase but not exposed
- * because the free tier does not return calories or protein.
- */
 @ExtendWith(MockitoExtension.class)
 class FoodSearchServiceTest {
 
@@ -28,113 +24,73 @@ class FoodSearchServiceTest {
     private RestTemplate restTemplate;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final String FAKE_KEY = "test-key";
 
-    private OpenFoodFactsService service() {
-        return new OpenFoodFactsService(restTemplate, objectMapper);
+    private GeminiService service() {
+        return new GeminiService(restTemplate, objectMapper, FAKE_KEY);
     }
 
-    private void stubResponse(String json) {
-        when(restTemplate.exchange(any(), eq(HttpMethod.GET), any(), eq(String.class)))
-                .thenReturn(ResponseEntity.ok(json));
+    /** Wrap a JSON array string in the Gemini response envelope */
+    private String geminiResponse(String jsonArray) {
+        return """
+                {"candidates":[{"content":{"role":"model","parts":[{"text":"%s"}]}}]}
+                """.formatted(jsonArray.replace("\"", "\\\""));
     }
 
-    /** Minimal Open Food Facts product JSON with all required nutriment fields */
-    private String offResponse(int count) {
-        StringBuilder products = new StringBuilder();
-        for (int i = 0; i < count; i++) {
-            if (i > 0) products.append(",");
-            products.append("""
-                {
-                  "product_name": "Food Item %d",
-                  "brands": "Brand %d",
-                  "nutriments": {
-                    "energy-kcal_100g": 89,
-                    "proteins_100g": 1.1,
-                    "carbohydrates_100g": 23.0,
-                    "fat_100g": 0.3
-                  }
-                }
-                """.formatted(i, i));
-        }
-        return "{\"products\":[" + products + "]}";
+    private void stubResponse(String jsonArray) {
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(geminiResponse(jsonArray)));
     }
 
     @Test
-    void search_returnsUpToFifteenResults() {
-        stubResponse(offResponse(20));
-        List<FoodSearchResult> results = service().search("banana");
-        assertThat(results).hasSize(15);
-    }
+    void analyze_parsesGeminiResponseCorrectly() {
+        stubResponse("""
+                [{"foodName":"Banana","quantityG":100,"calories":89,"proteinG":1.1,"carbsG":22.8,"fatG":0.3}]
+                """);
 
-    @Test
-    void search_skipsEntriesWithNoCalories() {
-        String json = """
-            {"products":[
-              {
-                "product_name": "No Calorie Food",
-                "brands": "",
-                "nutriments": {"energy-kcal_100g": 0, "proteins_100g": 0, "carbohydrates_100g": 0, "fat_100g": 0}
-              },
-              {
-                "product_name": "Banana",
-                "brands": "",
-                "nutriments": {"energy-kcal_100g": 89, "proteins_100g": 1.1, "carbohydrates_100g": 23, "fat_100g": 0.3}
-              }
-            ]}
-            """;
-        stubResponse(json);
-        List<FoodSearchResult> results = service().search("banana");
+        List<FoodAnalysisResult> results = service().analyze("banana");
+
         assertThat(results).hasSize(1);
-        assertThat(results.get(0).getProductName()).isEqualTo("Banana");
+        FoodAnalysisResult r = results.get(0);
+        assertThat(r.getFoodName()).isEqualTo("Banana");
+        assertThat(r.getQuantityG()).isEqualTo(100.0);
+        assertThat(r.getCalories()).isEqualTo(89.0);
+        assertThat(r.getProteinG()).isEqualTo(1.1);
     }
 
     @Test
-    void search_skipsEntriesWithEmptyProductName() {
-        String json = """
-            {"products":[
-              {"product_name": "", "brands": "", "nutriments": {"energy-kcal_100g": 89}},
-              {"product_name": "Apple", "brands": "", "nutriments": {"energy-kcal_100g": 52, "proteins_100g": 0.3, "carbohydrates_100g": 14, "fat_100g": 0.2}}
-            ]}
-            """;
-        stubResponse(json);
-        List<FoodSearchResult> results = service().search("apple");
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).getProductName()).isEqualTo("Apple");
+    void analyze_returnsMultipleItemsForMealDescription() {
+        stubResponse("""
+                [
+                  {"foodName":"Chicken Breast","quantityG":200,"calories":330,"proteinG":62,"carbsG":0,"fatG":7.2},
+                  {"foodName":"White Rice","quantityG":100,"calories":130,"proteinG":2.7,"carbsG":28.2,"fatG":0.3}
+                ]
+                """);
+
+        List<FoodAnalysisResult> results = service().analyze("200g chicken breast and 100g rice");
+
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0).getFoodName()).isEqualTo("Chicken Breast");
+        assertThat(results.get(1).getFoodName()).isEqualTo("White Rice");
     }
 
     @Test
-    void search_appendsBrandWhenPresentAndDifferent() {
-        String json = """
-            {"products":[{
-              "product_name": "Chicken Breast",
-              "brands": "Tyson",
-              "nutriments": {"energy-kcal_100g": 165, "proteins_100g": 31, "carbohydrates_100g": 0, "fat_100g": 3.6}
-            }]}
-            """;
-        stubResponse(json);
-        List<FoodSearchResult> results = service().search("chicken");
-        assertThat(results.get(0).getProductName()).isEqualTo("Chicken Breast (Tyson)");
-    }
-
-    @Test
-    void search_returnsServingSizeOf100() {
-        stubResponse(offResponse(1));
-        // Open Food Facts data is always per 100 g
-        assertThat(service().search("test").get(0).getServingSizeG()).isEqualTo(100.0);
-    }
-
-    @Test
-    void search_returnsEmptyListOnUpstreamFailure() {
-        when(restTemplate.exchange(any(), eq(HttpMethod.GET), any(), eq(String.class)))
+    void analyze_throwsOnUpstreamFailure() {
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(String.class)))
                 .thenThrow(new RuntimeException("network error"));
-        assertThatThrownBy(() -> service().search("banana"))
-                .isInstanceOf(RuntimeException.class);
+
+        assertThatThrownBy(() -> service().analyze("banana"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Food analysis failed");
     }
 
-    // Helper to use AssertJ's assertThatThrownBy
-    private static org.assertj.core.api.ThrowableTypeAssert<RuntimeException>
-    assertThatThrownBy(org.assertj.core.api.ThrowableAssert.ThrowingCallable callable) {
-        return org.assertj.core.api.Assertions.assertThatThrownBy(callable)
+    @Test
+    void analyze_throwsOnMalformedGeminiResponse() {
+        // Gemini returns something that can't be parsed as a JSON array
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(geminiResponse("not valid json")));
+
+        assertThatThrownBy(() -> service().analyze("banana"))
                 .isInstanceOf(RuntimeException.class);
     }
 }

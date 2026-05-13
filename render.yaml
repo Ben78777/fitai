@@ -15,7 +15,7 @@ services:
         sync: false
       - key: SUPABASE_ANON_KEY
         sync: false
-      - key: API_NINJAS_KEY
+      - key: GEMINI_API_KEY
         sync: false
       - key: CORS_ALLOWED_ORIGINS
         sync: false

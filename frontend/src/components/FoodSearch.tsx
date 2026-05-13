@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { searchFood, addLogEntry } from '../lib/api';
-import type { FoodSearchResult, MealType } from '../types';
+import { useState, useRef, useEffect } from 'react';
+import { analyzeFood, addLogEntry } from '../lib/api';
+import type { FoodAnalysisItem, MealType } from '../types';
 
 interface Props {
   mealType: MealType;
@@ -9,82 +9,71 @@ interface Props {
   onClose: () => void;
 }
 
-type Mode = 'search' | 'manual';
-
-function calcMacros(food: FoodSearchResult, grams: number) {
-  const f = grams / 100;
+// Scale an item's macros when the user edits the quantity
+function scaleItem(item: FoodAnalysisItem, newQty: number): FoodAnalysisItem {
+  const scale = item.quantityG > 0 ? newQty / item.quantityG : 1;
   const r = (n: number) => Math.round(n * 10) / 10;
   return {
-    calories: r(food.caloriesPer100g * f),
-    proteinG: r(food.proteinPer100g  * f),
-    carbsG:   r(food.carbsPer100g    * f),
-    fatG:     r(food.fatPer100g      * f),
+    foodName:  item.foodName,
+    quantityG: newQty,
+    calories:  r(item.calories  * scale),
+    proteinG:  r(item.proteinG  * scale),
+    carbsG:    r(item.carbsG    * scale),
+    fatG:      r(item.fatG      * scale),
   };
 }
 
 export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) {
-  const [mode, setMode] = useState<Mode>('search');
+  const [query,    setQuery]    = useState('');
+  const [items,    setItems]    = useState<FoodAnalysisItem[]>([]);
+  // edited quantities per row — stored as strings so the input stays responsive
+  const [qtys,     setQtys]     = useState<string[]>([]);
+  const [loading,  setLoading]  = useState(false);
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState('');
 
-  // ── Mode 1 (Search) ────────────────────────────────────────────
-  const [query, setQuery]       = useState('');
-  const [results, setResults]   = useState<FoodSearchResult[]>([]);
-  const [selected, setSelected] = useState<FoodSearchResult | null>(null);
-  const [quantity, setQuantity] = useState('');
-  const [hasSearched, setHasSearched] = useState(false);
-
-  // ── Mode 2 (Manual Entry) ──────────────────────────────────────
-  const [manualName,     setManualName]     = useState('');
-  const [manualCalories, setManualCalories] = useState('');
-  const [manualProtein,  setManualProtein]  = useState('');
-  const [manualCarbs,    setManualCarbs]    = useState('');
-  const [manualFat,      setManualFat]      = useState('');
-  const [manualServing,  setManualServing]  = useState('');
-
-  // ── Shared ─────────────────────────────────────────────────────
-  const [searching, setSearching] = useState(false);
-  const [saving,    setSaving]    = useState(false);
-  const [error,     setError]     = useState('');
-
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inputRef    = useRef<HTMLInputElement>(null);
-
+  const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  // Debounced live search — Mode 1
-  useEffect(() => {
-    if (mode !== 'search') return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+  // ── Analyze ────────────────────────────────────────────────────
+
+  async function handleAnalyze() {
     const trimmed = query.trim();
-    if (!trimmed) { setResults([]); setHasSearched(false); setError(''); return; }
+    if (!trimmed) return;
+    setLoading(true); setError(''); setItems([]); setQtys([]);
+    try {
+      const data = await analyzeFood(trimmed);
+      setItems(data);
+      setQtys(data.map((d) => String(d.quantityG)));
+    } catch {
+      setError('Analysis failed. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
-    debounceRef.current = setTimeout(async () => {
-      setSearching(true); setError(''); setSelected(null);
-      try {
-        const data = await searchFood(trimmed);
-        setResults(data);
-        setHasSearched(true);
-        if (data.length === 0) setError('No results found. Try a different term.');
-      } catch {
-        setError('Search failed. Check your connection and try again.');
-      } finally {
-        setSearching(false);
+  // ── Log all items ──────────────────────────────────────────────
+
+  async function handleLog() {
+    setSaving(true); setError('');
+    try {
+      // Log each food item as a separate entry, respecting edited quantities
+      for (let i = 0; i < items.length; i++) {
+        const qty = parseFloat(qtys[i]);
+        const scaled = scaleItem(items[i], isNaN(qty) || qty <= 0 ? items[i].quantityG : qty);
+        await addLogEntry({
+          date,
+          mealType,
+          foodName:  scaled.foodName,
+          quantityG: scaled.quantityG,
+          calories:  scaled.calories,
+          proteinG:  scaled.proteinG,
+          carbsG:    scaled.carbsG,
+          fatG:      scaled.fatG,
+        });
       }
-    }, 400);
-
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, mode]);
-
-  // ── Handlers ───────────────────────────────────────────────────
-
-  async function handleAdd() {
-    if (!selected) return;
-    const grams = parseFloat(quantity);
-    if (isNaN(grams) || grams <= 0) { setError('Enter a valid quantity in grams.'); return; }
-    setSaving(true); setError('');
-    try {
-      const macros = calcMacros(selected, grams);
-      await addLogEntry({ date, mealType, foodName: selected.productName, quantityG: grams, ...macros });
-      onAdded(); onClose();
+      onAdded();
+      onClose();
     } catch {
       setError('Failed to save. Please try again.');
     } finally {
@@ -92,38 +81,22 @@ export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) 
     }
   }
 
-  async function handleManualAdd() {
-    const cal = parseFloat(manualCalories);
-    if (!manualName.trim() || isNaN(cal) || cal <= 0) {
-      setError('Food name and calories are required.');
-      return;
-    }
-    setSaving(true); setError('');
-    try {
-      await addLogEntry({
-        date,
-        mealType,
-        foodName: manualName.trim(),
-        quantityG: parseFloat(manualServing) || 0,
-        calories:  cal,
-        proteinG:  parseFloat(manualProtein)  || 0,
-        carbsG:    parseFloat(manualCarbs)    || 0,
-        fatG:      parseFloat(manualFat)      || 0,
-      });
-      onAdded(); onClose();
-    } catch {
-      setError('Failed to save. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  }
+  // ── Derived totals ─────────────────────────────────────────────
 
-  function switchMode(next: Mode) {
-    setMode(next);
-    setError(''); setSearching(false);
-    if (next === 'search') { setResults([]); setSelected(null); setQuantity(''); setHasSearched(false); }
-    setTimeout(() => inputRef.current?.focus(), 0);
-  }
+  const totals = items.reduce(
+    (acc, item, i) => {
+      const qty = parseFloat(qtys[i]);
+      const s   = scaleItem(item, isNaN(qty) || qty <= 0 ? item.quantityG : qty);
+      const r   = (n: number) => Math.round(n * 10) / 10;
+      return {
+        calories: r(acc.calories + s.calories),
+        proteinG: r(acc.proteinG + s.proteinG),
+        carbsG:   r(acc.carbsG   + s.carbsG),
+        fatG:     r(acc.fatG     + s.fatG),
+      };
+    },
+    { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 }
+  );
 
   // ── Render ─────────────────────────────────────────────────────
 
@@ -142,195 +115,114 @@ export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) 
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
         </div>
 
-        {/* Mode tabs */}
-        <div className="flex rounded-lg border border-gray-200 mb-4 overflow-hidden">
-          {([['search', '🔍 Search'], ['manual', '✏️ Manual Entry']] as [Mode, string][]).map(([m, label]) => (
-            <button
-              key={m}
-              onClick={() => switchMode(m)}
-              className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                mode === m ? 'bg-green-500 text-white' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        {/* Search input */}
+        <div className="flex gap-2 mb-4">
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !loading && handleAnalyze()}
+            placeholder="e.g. banana  •  200g chicken breast and 100g rice"
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+          <button
+            onClick={handleAnalyze}
+            disabled={loading || !query.trim()}
+            className="bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
+          >
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+                Analyzing…
+              </span>
+            ) : 'Analyze'}
+          </button>
         </div>
 
-        {/* ══ MODE 1: Search ══════════════════════════════════════ */}
-        {mode === 'search' && (
-          <>
-            <div className="relative mb-3">
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={(e) => { setQuery(e.target.value); setSelected(null); }}
-                placeholder="Type a food name to search…"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-              {searching && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
-                </div>
-              )}
-            </div>
+        {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
 
-            {error && !selected && <p className="text-red-500 text-sm mb-3">{error}</p>}
-
-            {!selected && results.length > 0 && (
-              <ul className="divide-y divide-gray-100 max-h-64 overflow-y-auto rounded-lg border border-gray-200">
-                {results.map((item, i) => (
-                  <li key={i}>
-                    <button
-                      onClick={() => { setSelected(item); setQuantity(''); setError(''); }}
-                      className="w-full text-left px-4 py-3 hover:bg-green-50 transition-colors"
-                    >
-                      <p className="text-sm font-medium text-gray-900">{item.productName}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        per 100g ·{' '}
-                        <span className="text-orange-500 font-medium">{item.caloriesPer100g} kcal</span>
-                        {' · '}
-                        <span className="text-blue-500">{item.proteinPer100g}g P</span>
-                        {' · '}
-                        <span className="text-yellow-600">{item.carbsPer100g}g C</span>
-                        {' · '}
-                        <span className="text-red-400">{item.fatPer100g}g F</span>
-                      </p>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {!selected && !searching && !hasSearched && !query && (
-              <p className="text-center text-gray-400 text-sm py-6">
-                Start typing to search millions of foods
-              </p>
-            )}
-
-            {/* Quantity panel */}
-            {selected && (
-              <div className="border border-green-200 bg-green-50 rounded-lg p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <p className="text-sm font-medium text-gray-900 leading-snug flex-1 mr-2">{selected.productName}</p>
-                  <span className="text-xs text-gray-400 whitespace-nowrap">{selected.caloriesPer100g} kcal / 100g</span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-gray-700 whitespace-nowrap">Quantity (g):</label>
-                  <input
-                    type="number" min="0.1" step="any" value={quantity} autoFocus
-                    onChange={(e) => setQuantity(e.target.value)}
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                    placeholder="e.g. 150"
-                  />
-                </div>
-
-                {quantity && parseFloat(quantity) > 0 && (
-                  <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs">
-                    {(() => {
-                      const m = calcMacros(selected, parseFloat(quantity));
-                      return [
-                        { label: 'Calories', value: m.calories, unit: 'kcal', color: 'text-orange-500' },
-                        { label: 'Protein',  value: m.proteinG,  unit: 'g',    color: 'text-blue-500' },
-                        { label: 'Carbs',    value: m.carbsG,    unit: 'g',    color: 'text-yellow-600' },
-                        { label: 'Fat',      value: m.fatG,      unit: 'g',    color: 'text-red-400' },
-                      ].map(({ label, value, unit, color }) => (
-                        <div key={label} className="bg-white rounded-lg py-2">
-                          <p className={`font-semibold ${color}`}>{value}<span className="text-gray-400 font-normal">{unit}</span></p>
-                          <p className="text-gray-500 mt-0.5">{label}</p>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                )}
-
-                {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-
-                <div className="flex gap-2 mt-4">
-                  <button
-                    onClick={() => { setSelected(null); setTimeout(() => inputRef.current?.focus(), 0); }}
-                    className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm hover:bg-gray-50"
-                  >
-                    ← Back
-                  </button>
-                  <button
-                    onClick={handleAdd}
-                    disabled={saving || !quantity || parseFloat(quantity) <= 0}
-                    className="flex-1 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    {saving ? 'Saving…' : 'Add to log'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
+        {/* Empty state */}
+        {!loading && items.length === 0 && !error && (
+          <p className="text-center text-gray-400 text-sm py-8">
+            Type any food or meal and press Analyze
+          </p>
         )}
 
-        {/* ══ MODE 2: Manual Entry ════════════════════════════════ */}
-        {mode === 'manual' && (
-          <div className="space-y-3">
-            <p className="text-xs text-gray-400">
-              For restaurant meals, home cooking, or anything not in the database — enter the macros yourself.
-            </p>
+        {/* Results table */}
+        {items.length > 0 && (
+          <>
+            <div className="rounded-lg border border-gray-200 overflow-hidden mb-4">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-500 uppercase tracking-wide text-left">
+                    <th className="px-3 py-2 font-medium">Food</th>
+                    <th className="px-2 py-2 font-medium text-right">g</th>
+                    <th className="px-2 py-2 font-medium text-right text-orange-500">kcal</th>
+                    <th className="px-2 py-2 font-medium text-right text-blue-500">Pro</th>
+                    <th className="px-2 py-2 font-medium text-right text-yellow-600">Carb</th>
+                    <th className="px-2 py-2 font-medium text-right text-red-400">Fat</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {items.map((item, i) => {
+                    const qty = parseFloat(qtys[i]);
+                    const s   = scaleItem(item, isNaN(qty) || qty <= 0 ? item.quantityG : qty);
+                    return (
+                      <tr key={i} className="text-gray-700">
+                        <td className="px-3 py-2">{item.foodName}</td>
+                        <td className="px-2 py-1.5 text-right">
+                          {/* Editable quantity — macros rescale live */}
+                          <input
+                            type="number"
+                            min="0.1"
+                            step="any"
+                            value={qtys[i]}
+                            onChange={(e) => {
+                              const next = [...qtys];
+                              next[i] = e.target.value;
+                              setQtys(next);
+                            }}
+                            className="w-16 text-right border border-gray-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-400"
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-right font-medium text-orange-500">{s.calories}</td>
+                        <td className="px-2 py-2 text-right text-blue-500">{s.proteinG}g</td>
+                        <td className="px-2 py-2 text-right text-yellow-600">{s.carbsG}g</td>
+                        <td className="px-2 py-2 text-right text-red-400">{s.fatG}g</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
 
-            {/* Food name */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Food name *</label>
-              <input
-                ref={inputRef}
-                type="text"
-                value={manualName}
-                onChange={(e) => setManualName(e.target.value)}
-                placeholder="e.g. Chicken Salad, Homemade Burger…"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
+                {/* Total row — only shown for multiple items */}
+                {items.length > 1 && (
+                  <tfoot>
+                    <tr className="bg-green-50 font-semibold text-gray-800 border-t-2 border-green-200">
+                      <td className="px-3 py-2">Total</td>
+                      <td className="px-2 py-2" />
+                      <td className="px-2 py-2 text-right text-orange-500">{totals.calories}</td>
+                      <td className="px-2 py-2 text-right text-blue-500">{totals.proteinG}g</td>
+                      <td className="px-2 py-2 text-right text-yellow-600">{totals.carbsG}g</td>
+                      <td className="px-2 py-2 text-right text-red-400">{totals.fatG}g</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
             </div>
-
-            {/* Macro grid */}
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: 'Calories (kcal) *', value: manualCalories, setter: setManualCalories, color: 'focus:ring-orange-400', placeholder: 'e.g. 350' },
-                { label: 'Protein (g)',        value: manualProtein,  setter: setManualProtein,  color: 'focus:ring-blue-400',   placeholder: 'e.g. 25' },
-                { label: 'Carbs (g)',          value: manualCarbs,    setter: setManualCarbs,    color: 'focus:ring-yellow-400', placeholder: 'e.g. 30' },
-                { label: 'Fat (g)',            value: manualFat,      setter: setManualFat,      color: 'focus:ring-red-400',    placeholder: 'e.g. 12' },
-              ].map(({ label, value, setter, color, placeholder }) => (
-                <div key={label}>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-                  <input
-                    type="number" min="0" step="any"
-                    value={value}
-                    onChange={(e) => setter(e.target.value)}
-                    placeholder={placeholder}
-                    className={`w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${color}`}
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* Serving size (optional) */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Serving size (g) — optional</label>
-              <input
-                type="number" min="0" step="any"
-                value={manualServing}
-                onChange={(e) => setManualServing(e.target.value)}
-                placeholder="e.g. 250"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-            </div>
-
-            {error && <p className="text-red-500 text-sm">{error}</p>}
 
             <button
-              onClick={handleManualAdd}
-              disabled={saving || !manualName.trim() || !manualCalories}
+              onClick={handleLog}
+              disabled={saving}
               className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
             >
-              {saving ? 'Saving…' : 'Add to log'}
+              {saving
+                ? 'Saving…'
+                : items.length > 1
+                  ? `Log ${items.length} items (${totals.calories} kcal) to ${mealType}`
+                  : `Log to ${mealType} (${totals.calories} kcal)`}
             </button>
-          </div>
+          </>
         )}
       </div>
     </div>
