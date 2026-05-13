@@ -13,8 +13,8 @@ public class AppConfig {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         // Fail fast if the upstream API is unreachable
         factory.setConnectTimeout(5_000);
-        // Open Food Facts can be slow; 10s read timeout is generous but bounded
-        factory.setReadTimeout(10_000);
+        // Gemini can take a few seconds; 20s keeps us safe without hanging forever
+        factory.setReadTimeout(20_000);
         return new RestTemplate(factory);
     }
 }
