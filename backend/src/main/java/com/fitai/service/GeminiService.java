@@ -21,123 +21,117 @@ public class GeminiService {
 
     private static final Logger log = LoggerFactory.getLogger(GeminiService.class);
 
-    private static final String GEMINI_URL =
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+    // Groq's OpenAI-compatible endpoint — free tier: 14,400 req/day, 30 RPM
+    private static final String GROQ_URL =
+            "https://api.groq.com/openai/v1/chat/completions";
+    private static final String MODEL = "llama-3.3-70b-versatile";
 
+    // response_format:json_object requires "JSON" in the prompt and returns an object,
+    // so we wrap results under an "items" key to stay within that constraint.
     private static final String SYSTEM_PROMPT =
-            "You are a nutrition expert. When given a food query, return ONLY a JSON array " +
-            "with no markdown, no explanation. Each item must have: " +
-            "{\"foodName\": string, \"quantityG\": number (if specified, otherwise 100), " +
-            "\"calories\": number, \"proteinG\": number, \"carbsG\": number, \"fatG\": number}. " +
-            "If the user types a single food like \"chicken breast\", return macros for 100g. " +
-            "If the user types \"200g rice and 150g salmon\", return two items with correct quantities and calculated macros. " +
-            "Only return the JSON array, nothing else.";
+            "You are a nutrition expert. Return ONLY a JSON object (no markdown, no extra text) " +
+            "with a single key \"items\" containing an array of food entries. " +
+            "Each entry must have exactly these fields: " +
+            "foodName (string), quantityG (number — use the quantity given, or 100 if unspecified), " +
+            "calories (number), proteinG (number), carbsG (number), fatG (number). " +
+            "Example for input \"200g chicken breast and 1 banana\": " +
+            "{\"items\":[" +
+            "{\"foodName\":\"Chicken Breast\",\"quantityG\":200,\"calories\":330,\"proteinG\":62,\"carbsG\":0,\"fatG\":7.2}," +
+            "{\"foodName\":\"Banana\",\"quantityG\":118,\"calories\":105,\"proteinG\":1.3,\"carbsG\":27,\"fatG\":0.4}" +
+            "]}";
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
-    private final String geminiApiKey;
+    private final String groqApiKey;
 
     public GeminiService(RestTemplate restTemplate,
                          ObjectMapper objectMapper,
-                         @Value("${gemini.api-key}") String geminiApiKey) {
+                         @Value("${groq.api-key}") String groqApiKey) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
-        this.geminiApiKey = geminiApiKey;
+        this.groqApiKey = groqApiKey;
     }
 
     public List<FoodAnalysisResult> analyze(String query) {
-        String url = GEMINI_URL + "?key=" + geminiApiKey;
-
-        // Build request body with ObjectNode to guarantee correct JSON serialization
         String requestBody;
         try {
             requestBody = buildRequestBody(query.trim());
         } catch (Exception e) {
-            throw new RuntimeException("Failed to build Gemini request: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to build request: " + e.getMessage(), e);
         }
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(groqApiKey);
 
-        log.info("Calling Gemini for: '{}'", query);
+        log.info("Calling Groq for: '{}'", query);
 
         ResponseEntity<String> response;
         try {
             response = restTemplate.exchange(
-                    url, HttpMethod.POST,
+                    GROQ_URL, HttpMethod.POST,
                     new HttpEntity<>(requestBody, headers),
                     String.class);
         } catch (HttpClientErrorException e) {
-            // Log Gemini's error body so we can see exactly what went wrong
-            log.error("Gemini API error {} for '{}': {}", e.getStatusCode(), query, e.getResponseBodyAsString());
+            log.error("Groq API error {} for '{}': {}", e.getStatusCode(), query, e.getResponseBodyAsString());
             throw new RuntimeException("Food analysis failed: " + e.getMessage(), e);
         } catch (Exception e) {
-            log.error("Gemini API call failed for '{}': {}", query, e.getMessage());
+            log.error("Groq API call failed for '{}': {}", query, e.getMessage());
             throw new RuntimeException("Food analysis failed: " + e.getMessage(), e);
         }
 
-        log.info("Gemini responded {}", response.getStatusCode());
+        log.info("Groq responded {}", response.getStatusCode());
 
         try {
             JsonNode root = objectMapper.readTree(response.getBody());
 
-            // Extract the text from candidates[0].content.parts[0].text
-            JsonNode candidates = root.path("candidates");
-            if (!candidates.isArray() || candidates.isEmpty()) {
-                log.error("Gemini response has no candidates: {}", response.getBody());
-                throw new RuntimeException("Gemini returned no candidates");
+            // OpenAI-compatible response: choices[0].message.content
+            JsonNode choices = root.path("choices");
+            if (!choices.isArray() || choices.isEmpty()) {
+                log.error("Groq response has no choices: {}", response.getBody());
+                throw new RuntimeException("Groq returned no choices");
             }
 
-            String jsonText = candidates.get(0)
-                                        .path("content")
-                                        .path("parts")
-                                        .get(0)
-                                        .path("text")
-                                        .asText();
+            String jsonText = choices.get(0).path("message").path("content").asText();
 
-            log.info("Gemini raw result: {}",
+            log.info("Groq raw result: {}",
                     jsonText.length() > 300 ? jsonText.substring(0, 300) + "…" : jsonText);
 
-            // Explicit type parameter prevents type-erasure from deserializing as List<LinkedHashMap>
+            // Unwrap {"items":[...]} and deserialize the array
+            JsonNode items = objectMapper.readTree(jsonText).path("items");
             List<FoodAnalysisResult> results =
-                    objectMapper.readValue(jsonText, new TypeReference<List<FoodAnalysisResult>>() {});
+                    objectMapper.convertValue(items, new TypeReference<List<FoodAnalysisResult>>() {});
 
             log.info("Returning {} items for '{}'", results.size(), query);
             return results;
 
         } catch (Exception e) {
-            log.error("Failed to parse Gemini response for '{}': {}", query, e.getMessage());
-            throw new RuntimeException("Failed to parse Gemini response: " + e.getMessage(), e);
+            log.error("Failed to parse Groq response for '{}': {}", query, e.getMessage());
+            throw new RuntimeException("Failed to parse Groq response: " + e.getMessage(), e);
         }
     }
 
-    /** Build the Gemini JSON request body using Jackson nodes — no Map.of() surprises */
+    /** Build an OpenAI-compatible chat completion request body */
     private String buildRequestBody(String query) throws Exception {
         ObjectNode root = objectMapper.createObjectNode();
+        root.put("model", MODEL);
+        root.put("temperature", 0.0);
+        // json_object mode guarantees valid JSON output — no markdown fences
+        root.set("response_format", objectMapper.createObjectNode().put("type", "json_object"));
 
-        // systemInstruction
-        ObjectNode systemInstruction = objectMapper.createObjectNode();
-        ArrayNode sysParts = objectMapper.createArrayNode();
-        sysParts.add(objectMapper.createObjectNode().put("text", SYSTEM_PROMPT));
-        systemInstruction.set("parts", sysParts);
-        root.set("systemInstruction", systemInstruction);
+        ArrayNode messages = objectMapper.createArrayNode();
 
-        // contents
-        ArrayNode contents = objectMapper.createArrayNode();
-        ObjectNode userTurn = objectMapper.createObjectNode();
-        userTurn.put("role", "user");
-        ArrayNode userParts = objectMapper.createArrayNode();
-        userParts.add(objectMapper.createObjectNode().put("text", query));
-        userTurn.set("parts", userParts);
-        contents.add(userTurn);
-        root.set("contents", contents);
+        ObjectNode systemMsg = objectMapper.createObjectNode();
+        systemMsg.put("role", "system");
+        systemMsg.put("content", SYSTEM_PROMPT);
+        messages.add(systemMsg);
 
-        // generationConfig — responseMimeType constrains output to valid JSON
-        ObjectNode config = objectMapper.createObjectNode();
-        config.put("temperature", 0.0);
-        config.put("responseMimeType", "application/json");
-        root.set("generationConfig", config);
+        ObjectNode userMsg = objectMapper.createObjectNode();
+        userMsg.put("role", "user");
+        userMsg.put("content", query);
+        messages.add(userMsg);
 
+        root.set("messages", messages);
         return objectMapper.writeValueAsString(root);
     }
 }

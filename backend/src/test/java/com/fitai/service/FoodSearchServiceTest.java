@@ -30,23 +30,21 @@ class FoodSearchServiceTest {
         return new GeminiService(restTemplate, objectMapper, FAKE_KEY);
     }
 
-    /** Wrap a JSON array string in the Gemini response envelope */
-    private String geminiResponse(String jsonArray) {
-        return """
-                {"candidates":[{"content":{"role":"model","parts":[{"text":"%s"}]}}]}
-                """.formatted(jsonArray.replace("\"", "\\\""));
+    /** Wrap a JSON items array string in the Groq OpenAI-compatible response envelope */
+    private String groqResponse(String itemsJson) {
+        // Escape the inner JSON so it sits safely inside the outer string value
+        String escaped = itemsJson.replace("\\", "\\\\").replace("\"", "\\\"");
+        return "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"items\\\":" + escaped + "}\"}}]}";
     }
 
-    private void stubResponse(String jsonArray) {
+    private void stubResponse(String itemsJson) {
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(String.class)))
-                .thenReturn(ResponseEntity.ok(geminiResponse(jsonArray)));
+                .thenReturn(ResponseEntity.ok(groqResponse(itemsJson)));
     }
 
     @Test
-    void analyze_parsesGeminiResponseCorrectly() {
-        stubResponse("""
-                [{"foodName":"Banana","quantityG":100,"calories":89,"proteinG":1.1,"carbsG":22.8,"fatG":0.3}]
-                """);
+    void analyze_parsesGroqResponseCorrectly() {
+        stubResponse("[{\"foodName\":\"Banana\",\"quantityG\":100,\"calories\":89,\"proteinG\":1.1,\"carbsG\":22.8,\"fatG\":0.3}]");
 
         List<FoodAnalysisResult> results = service().analyze("banana");
 
@@ -60,12 +58,10 @@ class FoodSearchServiceTest {
 
     @Test
     void analyze_returnsMultipleItemsForMealDescription() {
-        stubResponse("""
-                [
-                  {"foodName":"Chicken Breast","quantityG":200,"calories":330,"proteinG":62,"carbsG":0,"fatG":7.2},
-                  {"foodName":"White Rice","quantityG":100,"calories":130,"proteinG":2.7,"carbsG":28.2,"fatG":0.3}
-                ]
-                """);
+        stubResponse("[" +
+                "{\"foodName\":\"Chicken Breast\",\"quantityG\":200,\"calories\":330,\"proteinG\":62,\"carbsG\":0,\"fatG\":7.2}," +
+                "{\"foodName\":\"White Rice\",\"quantityG\":100,\"calories\":130,\"proteinG\":2.7,\"carbsG\":28.2,\"fatG\":0.3}" +
+                "]");
 
         List<FoodAnalysisResult> results = service().analyze("200g chicken breast and 100g rice");
 
@@ -85,10 +81,9 @@ class FoodSearchServiceTest {
     }
 
     @Test
-    void analyze_throwsOnMalformedGeminiResponse() {
-        // Gemini returns something that can't be parsed as a JSON array
+    void analyze_throwsOnMalformedResponse() {
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(String.class)))
-                .thenReturn(ResponseEntity.ok(geminiResponse("not valid json")));
+                .thenReturn(ResponseEntity.ok("{\"choices\":[{\"message\":{\"content\":\"not valid json\"}}]}"));
 
         assertThatThrownBy(() -> service().analyze("banana"))
                 .isInstanceOf(RuntimeException.class);
