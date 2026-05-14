@@ -17,8 +17,14 @@ export default function Auth() {
 
     try {
       if (tab === 'register') {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
+        // When email confirmation is ON, Supabase silently "succeeds" for existing
+        // emails but returns an empty identities array — detect that here.
+        if (data.user?.identities?.length === 0) {
+          setError('An account with this email already exists. Please log in instead.');
+          return;
+        }
         setMessage('Check your email to confirm your account.');
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -26,7 +32,13 @@ export default function Auth() {
         // Session is set automatically — App.tsx listener picks it up
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.');
+      const msg = err instanceof Error ? err.message : 'Something went wrong.';
+      // Supabase returns this message when email confirmations are OFF
+      if (tab === 'register' && msg.toLowerCase().includes('already registered')) {
+        setError('An account with this email already exists. Please log in instead.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }

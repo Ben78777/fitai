@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { analyzeFood, addLogEntry } from '../lib/api';
+import { analyzeFood, analyzeFoodImage, addLogEntry } from '../lib/api';
 import type { FoodAnalysisItem, MealType } from '../types';
 
 interface Props {
@@ -23,21 +23,39 @@ function scaleItem(item: FoodAnalysisItem, newQty: number): FoodAnalysisItem {
   };
 }
 
+/** Read a File and return its raw base64 content (no data: prefix) */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) {
-  const [query,    setQuery]    = useState('');
-  const [items,    setItems]    = useState<FoodAnalysisItem[]>([]);
+  const [query,        setQuery]        = useState('');
+  const [imageFile,    setImageFile]    = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [items,        setItems]        = useState<FoodAnalysisItem[]>([]);
   // edited quantities per row — stored as strings so the input stays responsive
-  const [qtys,     setQtys]     = useState<string[]>([]);
-  const [loading,  setLoading]  = useState(false);
-  const [saving,   setSaving]   = useState(false);
-  const [error,    setError]    = useState('');
+  const [qtys,         setQtys]         = useState<string[]>([]);
+  const [loading,      setLoading]      = useState(false);
+  const [saving,       setSaving]       = useState(false);
+  const [error,        setError]        = useState('');
 
-  const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { textareaRef.current?.focus(); }, []);
 
-  // ── Analyze ────────────────────────────────────────────────────
+  // ── Text analysis ──────────────────────────────────────────────
 
   async function handleAnalyze() {
+    // If an image is loaded, re-analyze it; otherwise use the text query
+    if (imageFile) {
+      await runImageAnalysis(imageFile);
+      return;
+    }
     const trimmed = query.trim();
     if (!trimmed) return;
     setLoading(true); setError(''); setItems([]); setQtys([]);
@@ -52,6 +70,45 @@ export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) 
     }
   }
 
+  // ── Image analysis ─────────────────────────────────────────────
+
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Show preview immediately
+    const reader = new FileReader();
+    reader.onload = (ev) => setImagePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+    setImageFile(file);
+    setQuery(''); // text and image are mutually exclusive
+    // Auto-trigger analysis as soon as the image is picked
+    await runImageAnalysis(file);
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
+  }
+
+  async function runImageAnalysis(file: File) {
+    setLoading(true); setError(''); setItems([]); setQtys([]);
+    try {
+      const base64 = await fileToBase64(file);
+      const data   = await analyzeFoodImage(base64, file.type);
+      setItems(data);
+      setQtys(data.map((d) => String(d.quantityG)));
+    } catch {
+      setError('Analysis failed. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function clearImage() {
+    setImageFile(null);
+    setImagePreview('');
+    setItems([]);
+    setQtys([]);
+    setError('');
+  }
+
   // ── Log all items ──────────────────────────────────────────────
 
   async function handleLog() {
@@ -59,7 +116,7 @@ export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) 
     try {
       // Log each food item as a separate entry, respecting edited quantities
       for (let i = 0; i < items.length; i++) {
-        const qty = parseFloat(qtys[i]);
+        const qty    = parseFloat(qtys[i]);
         const scaled = scaleItem(items[i], isNaN(qty) || qty <= 0 ? items[i].quantityG : qty);
         await addLogEntry({
           date,
@@ -115,37 +172,85 @@ export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) 
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
         </div>
 
-        {/* Search input */}
-        <div className="flex gap-2 mb-4">
-          <input
-            ref={inputRef}
-            type="text"
+        {/* Input area */}
+        <div className="mb-4 space-y-2">
+          {/* Tall textarea — Shift+Enter for newline, Enter to analyze */}
+          <textarea
+            ref={textareaRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !loading && handleAnalyze()}
-            placeholder="e.g. banana  •  200g chicken breast and 100g rice"
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            onChange={(e) => {
+              setQuery(e.target.value);
+              // Typing clears any uploaded image
+              if (imageFile) clearImage();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !loading) {
+                e.preventDefault();
+                handleAnalyze();
+              }
+            }}
+            placeholder={"e.g. 200g chicken breast, 100g rice and salad\nShift+Enter for new line · Enter to analyze"}
+            rows={3}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
           />
-          <button
-            onClick={handleAnalyze}
-            disabled={loading || !query.trim()}
-            className="bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
-          >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-                Analyzing…
-              </span>
-            ) : 'Analyze'}
-          </button>
+
+          {/* Image preview (shown when a photo has been picked) */}
+          {imagePreview && (
+            <div className="flex items-center gap-3 px-1">
+              <img
+                src={imagePreview}
+                alt="Food photo"
+                className="h-14 w-14 object-cover rounded-lg border border-gray-200"
+              />
+              <span className="text-sm text-gray-500 flex-1">Photo ready — analyzing…</span>
+              <button
+                onClick={clearImage}
+                className="text-gray-400 hover:text-red-500 text-lg leading-none"
+                title="Remove photo"
+              >✕</button>
+            </div>
+          )}
+
+          {/* Action row: photo upload button + analyze button */}
+          <div className="flex items-center gap-2">
+            {/* Hidden file input — accepts any image format */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              className="flex items-center gap-1.5 border border-gray-300 hover:border-gray-400 disabled:opacity-50 text-gray-600 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+              title="Upload a food photo"
+            >
+              <span>📷</span> Photo
+            </button>
+
+            <button
+              onClick={handleAnalyze}
+              disabled={loading || (!query.trim() && !imageFile)}
+              className="flex-1 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+                  Analyzing…
+                </span>
+              ) : 'Analyze'}
+            </button>
+          </div>
         </div>
 
         {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
 
         {/* Empty state */}
         {!loading && items.length === 0 && !error && (
-          <p className="text-center text-gray-400 text-sm py-8">
-            Type any food or meal and press Analyze
+          <p className="text-center text-gray-400 text-sm py-6">
+            Type any food or meal and press Analyze, or upload a photo 📷
           </p>
         )}
 

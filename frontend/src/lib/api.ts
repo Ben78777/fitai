@@ -20,6 +20,11 @@ export async function analyzeFood(query: string): Promise<FoodAnalysisItem[]> {
   return data;
 }
 
+export async function analyzeFoodImage(imageBase64: string, mimeType: string): Promise<FoodAnalysisItem[]> {
+  const { data } = await api.post<FoodAnalysisItem[]>('/api/v1/food/analyze-image', { imageBase64, mimeType });
+  return data;
+}
+
 export async function getLog(date: string): Promise<LogEntry[]> {
   const { data } = await api.get<LogEntry[]>('/api/v1/log', {
     params: { date },
