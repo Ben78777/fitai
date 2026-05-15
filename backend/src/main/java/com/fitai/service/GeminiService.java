@@ -30,25 +30,35 @@ public class GeminiService {
 
     // Text analysis: response_format=json_object guarantees clean JSON,
     // so we wrap results under {"items":[...]} to satisfy the object constraint.
+    // Micronutrient fields are optional — use null when unknown.
     private static final String TEXT_SYSTEM_PROMPT =
             "You are a nutrition expert. Return ONLY a JSON object (no markdown, no extra text) " +
             "with a single key \"items\" containing an array of food entries. " +
-            "Each entry must have exactly these fields: " +
+            "Each entry must have these fields: " +
             "foodName (string), quantityG (number — use the quantity given, or 100 if unspecified), " +
-            "calories (number), proteinG (number), carbsG (number), fatG (number). " +
-            "Example for \"200g chicken breast and 1 banana\": " +
-            "{\"items\":[" +
-            "{\"foodName\":\"Chicken Breast\",\"quantityG\":200,\"calories\":330,\"proteinG\":62,\"carbsG\":0,\"fatG\":7.2}," +
-            "{\"foodName\":\"Banana\",\"quantityG\":118,\"calories\":105,\"proteinG\":1.3,\"carbsG\":27,\"fatG\":0.4}" +
-            "]}";
+            "calories (number), proteinG (number), carbsG (number), fatG (number), " +
+            "fiberG (number or null), sugarG (number or null), sodiumMg (number or null), " +
+            "potassiumMg (number or null), vitaminCMg (number or null), vitaminDMcg (number or null), " +
+            "calciumMg (number or null), ironMg (number or null). " +
+            "Set micronutrient fields to null when data is unavailable. " +
+            "Example for \"200g chicken breast\": " +
+            "{\"items\":[{\"foodName\":\"Chicken Breast\",\"quantityG\":200,\"calories\":330," +
+            "\"proteinG\":62,\"carbsG\":0,\"fatG\":7.2,\"fiberG\":0,\"sugarG\":0," +
+            "\"sodiumMg\":148,\"potassiumMg\":440,\"vitaminCMg\":0,\"vitaminDMcg\":null," +
+            "\"calciumMg\":14,\"ironMg\":1.4}]}";
 
     // Image analysis: vision models may not support response_format,
     // so we ask for JSON in the prompt and strip markdown fences in parsing.
+    // Micronutrient fields are optional — use null when unknown.
     private static final String IMAGE_SYSTEM_PROMPT =
             "You are a nutrition expert. Identify every food item visible in the image and " +
             "return ONLY a JSON object with a single key \"items\" containing an array. " +
             "Each entry must have: foodName (string), quantityG (number — estimate the portion), " +
-            "calories (number), proteinG (number), carbsG (number), fatG (number). " +
+            "calories (number), proteinG (number), carbsG (number), fatG (number), " +
+            "fiberG (number or null), sugarG (number or null), sodiumMg (number or null), " +
+            "potassiumMg (number or null), vitaminCMg (number or null), vitaminDMcg (number or null), " +
+            "calciumMg (number or null), ironMg (number or null). " +
+            "Set micronutrient fields to null when data is unavailable. " +
             "No markdown, no explanation — only the JSON object.";
 
     private final RestTemplate restTemplate;

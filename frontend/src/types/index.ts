@@ -5,6 +5,15 @@ export interface FoodAnalysisItem {
   proteinG: number;
   carbsG: number;
   fatG: number;
+  // Micronutrients — null when AI had no data for this food
+  fiberG?: number | null;
+  sugarG?: number | null;
+  sodiumMg?: number | null;
+  potassiumMg?: number | null;
+  vitaminCMg?: number | null;
+  vitaminDMcg?: number | null;
+  calciumMg?: number | null;
+  ironMg?: number | null;
 }
 
 export interface LogEntry {
@@ -16,6 +25,15 @@ export interface LogEntry {
   proteinG: number;
   carbsG: number;
   fatG: number;
+  // Micronutrients — null/absent for entries logged before micronutrient support
+  fiberG?: number | null;
+  sugarG?: number | null;
+  sodiumMg?: number | null;
+  potassiumMg?: number | null;
+  vitaminCMg?: number | null;
+  vitaminDMcg?: number | null;
+  calciumMg?: number | null;
+  ironMg?: number | null;
 }
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
@@ -44,7 +62,11 @@ export interface CreateProfilePayload {
 }
 
 export interface UpdateProfilePayload {
-  calorieTargetOffset: number;
+  weightKg?: number;
+  age?: number;
+  goal?: string;
+  activityLevel?: string;
+  calorieTargetOffset?: number;
 }
 
 export interface ProgressData {
@@ -82,4 +104,13 @@ export interface CreateLogEntryPayload {
   proteinG: number;
   carbsG: number;
   fatG: number;
+  // Micronutrients — omit or pass null when not available
+  fiberG?: number | null;
+  sugarG?: number | null;
+  sodiumMg?: number | null;
+  potassiumMg?: number | null;
+  vitaminCMg?: number | null;
+  vitaminDMcg?: number | null;
+  calciumMg?: number | null;
+  ironMg?: number | null;
 }

@@ -2,9 +2,11 @@ import type { ProgressData } from '../types';
 
 interface Props {
   data: ProgressData;
+  isToday: boolean;
+  selectedDate: string;   // YYYY-MM-DD — used for the "today" label
 }
 
-export default function ProgressDashboard({ data }: Props) {
+export default function ProgressDashboard({ data, isToday, selectedDate }: Props) {
   const {
     dailyCalorieTarget,
     todayCalories,
@@ -15,25 +17,24 @@ export default function ProgressDashboard({ data }: Props) {
   } = data;
 
   const isMaintenance = goal === 'maintenance';
-  const isOver = todayCalories > dailyCalorieTarget;
-
-  // How far along the progress bar (capped at 100%)
-  const barPct = dailyCalorieTarget > 0
+  const pct = dailyCalorieTarget > 0
     ? Math.min((todayCalories / dailyCalorieTarget) * 100, 100)
     : 0;
+  const isOver = todayCalories > dailyCalorieTarget;
 
-  // ── Color helpers ──────────────────────────────────────────────────────────
+  // Green < 80%, yellow 80–100%, red over target
+  const barColor = isOver
+    ? 'bg-red-400'
+    : pct >= 80
+      ? 'bg-yellow-400'
+      : 'bg-green-400';
 
-  // For cutting: deficit (negative) is good. For bulking: surplus (positive) is good.
+  // Color for numeric deltas
   function deltaColor(value: number): string {
     if (isMaintenance) return 'text-gray-700';
-    const isGood =
-      (goal === 'cutting' && value <= 0) ||
-      (goal === 'bulking' && value >= 0);
-    return isGood ? 'text-green-600' : 'text-red-500';
+    const good = (goal === 'cutting' && value <= 0) || (goal === 'bulking' && value >= 0);
+    return good ? 'text-green-600' : 'text-red-500';
   }
-
-  // ── Formatters ────────────────────────────────────────────────────────────
 
   function formatDelta(kcal: number): string {
     const abs = Math.abs(kcal).toLocaleString();
@@ -42,67 +43,78 @@ export default function ProgressDashboard({ data }: Props) {
     return 'On target';
   }
 
-  // Show "Estimated loss" / "Estimated gain" / "No change yet"
-  const weightAbs = Math.abs(estimatedWeightChangeKg);
+  // Format the selected date into a short label like "Fri, May 15"
+  function dateLabel(): string {
+    if (isToday) return 'Today';
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric',
+    });
+  }
+
+  const weightAbs   = Math.abs(estimatedWeightChangeKg);
   const weightLabel =
-    estimatedWeightChangeKg < -0.004 ? 'Estimated loss'
-    : estimatedWeightChangeKg > 0.004 ? 'Estimated gain'
+    estimatedWeightChangeKg < -0.004 ? 'Est. weight loss'
+    : estimatedWeightChangeKg > 0.004 ? 'Est. weight gain'
     : 'No change yet';
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-6">
-      <h2 className="text-base font-semibold text-gray-900 mb-4">Progress</h2>
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-4">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-gray-900">Progress</h2>
+        <span className="text-xs text-gray-400">{dateLabel()}</span>
+      </div>
 
-      {/* ── Calorie intake vs target ── */}
+      {/* ── Calorie bar ── */}
       <div className="flex justify-between items-baseline mb-1.5">
-        <span className="text-sm text-gray-500">Today's intake</span>
+        <span className="text-2xl font-bold text-gray-900">
+          {Math.round(todayCalories).toLocaleString()}
+          <span className="text-sm font-normal text-gray-400 ml-1">kcal</span>
+        </span>
         <span className="text-xs text-gray-400">
-          Target: {dailyCalorieTarget.toLocaleString()} kcal
+          of {dailyCalorieTarget.toLocaleString()} goal
         </span>
       </div>
 
-      {/* Progress bar — turns red when over target */}
-      <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+      {/* Smooth multi-color progress bar */}
+      <div className="h-3 bg-gray-100 rounded-full overflow-hidden mb-1">
         <div
-          className={`h-full rounded-full transition-all duration-300 ${
-            isOver ? 'bg-red-400' : 'bg-orange-400'
-          }`}
-          style={{ width: `${barPct}%` }}
+          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+          style={{ width: `${pct}%` }}
         />
       </div>
 
-      <div className="flex justify-between mt-1.5">
-        <span className={`text-sm font-semibold ${isOver ? 'text-red-500' : 'text-gray-900'}`}>
-          {Math.round(todayCalories).toLocaleString()} kcal
+      <div className="flex justify-between mb-4">
+        <span className={`text-xs font-medium ${isOver ? 'text-red-500' : 'text-gray-500'}`}>
+          {isOver
+            ? `${(todayCalories - dailyCalorieTarget).toLocaleString()} kcal over`
+            : `${(dailyCalorieTarget - todayCalories).toLocaleString()} kcal remaining`
+          }
         </span>
-        <span className="text-xs text-gray-400">{Math.round(barPct)}%</span>
+        <span className="text-xs text-gray-400">{Math.round(pct)}%</span>
       </div>
 
-      {/* ── Deficit / surplus section (hidden for maintenance) ── */}
+      {/* ── Deficit / surplus (hidden for maintenance) ── */}
       {!isMaintenance && (
-        <div className="mt-4 pt-4 border-t border-gray-100 space-y-2.5">
-
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-gray-500">Today</span>
-            <span className={`font-medium ${deltaColor(todaySurplusDeficit)}`}>
+        <div className="pt-3 border-t border-gray-100 grid grid-cols-3 gap-2 text-center">
+          <div>
+            <p className={`text-sm font-semibold ${deltaColor(todaySurplusDeficit)}`}>
               {formatDelta(todaySurplusDeficit)}
-            </span>
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">{dateLabel()}</p>
           </div>
-
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-gray-500">All time</span>
-            <span className={`font-medium ${deltaColor(accumulatedSurplusDeficit)}`}>
+          <div>
+            <p className={`text-sm font-semibold ${deltaColor(accumulatedSurplusDeficit)}`}>
               {formatDelta(accumulatedSurplusDeficit)}
-            </span>
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">All time</p>
           </div>
-
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-gray-500">{weightLabel}</span>
-            <span className={`font-medium ${deltaColor(accumulatedSurplusDeficit)}`}>
-              {weightAbs > 0.004 ? `${weightAbs} kg` : '—'}
-            </span>
+          <div>
+            <p className={`text-sm font-semibold ${deltaColor(accumulatedSurplusDeficit)}`}>
+              {weightAbs > 0.004 ? `${estimatedWeightChangeKg > 0 ? '+' : ''}${estimatedWeightChangeKg} kg` : '—'}
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">{weightLabel}</p>
           </div>
-
         </div>
       )}
     </div>

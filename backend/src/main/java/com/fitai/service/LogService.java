@@ -40,6 +40,15 @@ public class LogService {
         entry.setProteinG(request.getProteinG());
         entry.setCarbsG(request.getCarbsG());
         entry.setFatG(request.getFatG());
+        // Micronutrients — stored as-is (null when AI didn't return data)
+        entry.setFiberG(request.getFiberG());
+        entry.setSugarG(request.getSugarG());
+        entry.setSodiumMg(request.getSodiumMg());
+        entry.setPotassiumMg(request.getPotassiumMg());
+        entry.setVitaminCMg(request.getVitaminCMg());
+        entry.setVitaminDMcg(request.getVitaminDMcg());
+        entry.setCalciumMg(request.getCalciumMg());
+        entry.setIronMg(request.getIronMg());
 
         MealEntry saved = repository.save(entry);
         return toResponse(saved);
@@ -54,15 +63,23 @@ public class LogService {
     }
 
     private LogEntryResponse toResponse(MealEntry entry) {
-        return new LogEntryResponse(
-                entry.getId(),
-                entry.getMealType(),
-                entry.getFoodName(),
-                entry.getQuantityG(),
-                entry.getCalories(),
-                entry.getProteinG(),
-                entry.getCarbsG(),
-                entry.getFatG()
-        );
+        LogEntryResponse r = new LogEntryResponse();
+        r.setId(entry.getId());
+        r.setMealType(entry.getMealType());
+        r.setFoodName(entry.getFoodName());
+        r.setQuantityG(entry.getQuantityG());
+        r.setCalories(entry.getCalories());
+        r.setProteinG(entry.getProteinG());
+        r.setCarbsG(entry.getCarbsG());
+        r.setFatG(entry.getFatG());
+        r.setFiberG(entry.getFiberG());
+        r.setSugarG(entry.getSugarG());
+        r.setSodiumMg(entry.getSodiumMg());
+        r.setPotassiumMg(entry.getPotassiumMg());
+        r.setVitaminCMg(entry.getVitaminCMg());
+        r.setVitaminDMcg(entry.getVitaminDMcg());
+        r.setCalciumMg(entry.getCalciumMg());
+        r.setIronMg(entry.getIronMg());
+        return r;
     }
 }

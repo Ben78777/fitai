@@ -61,8 +61,11 @@ export async function patchProfile(payload: UpdateProfilePayload): Promise<UserP
 
 // ── Progress ───────────────────────────────────────────────────────
 
-export async function getProgress(): Promise<ProgressData> {
-  const { data } = await api.get<ProgressData>('/api/v1/progress');
+/** Fetches progress for the given date (defaults to today if omitted). */
+export async function getProgress(date?: string): Promise<ProgressData> {
+  const { data } = await api.get<ProgressData>('/api/v1/progress', {
+    params: date ? { date } : undefined,
+  });
   return data;
 }
 

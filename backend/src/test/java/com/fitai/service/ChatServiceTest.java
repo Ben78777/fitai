@@ -66,7 +66,7 @@ class ChatServiceTest {
     @Test
     void chat_returnsGroqReply() {
         when(profileRepository.findByUserId("u1")).thenReturn(Optional.of(sampleProfile()));
-        when(progressService.getProgress("u1")).thenReturn(sampleProgress());
+        when(progressService.getProgress(eq("u1"), any(LocalDate.class))).thenReturn(sampleProgress());
         when(mealEntryRepository.findByUserIdAndDateOrderByCreatedAtAsc(eq("u1"), any(LocalDate.class)))
                 .thenReturn(List.of());
         when(geminiService.chat(any(ArrayNode.class))).thenReturn("Great progress today, Alice!");
@@ -79,7 +79,7 @@ class ChatServiceTest {
     @Test
     void chat_includesConversationHistory() {
         when(profileRepository.findByUserId("u1")).thenReturn(Optional.of(sampleProfile()));
-        when(progressService.getProgress("u1")).thenReturn(sampleProgress());
+        when(progressService.getProgress(eq("u1"), any(LocalDate.class))).thenReturn(sampleProgress());
         when(mealEntryRepository.findByUserIdAndDateOrderByCreatedAtAsc(eq("u1"), any(LocalDate.class)))
                 .thenReturn(List.of());
         when(geminiService.chat(any(ArrayNode.class))).thenReturn("Keep it up!");

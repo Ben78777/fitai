@@ -37,12 +37,12 @@ public class ProfileController {
                 .body(profileService.createProfile(userId, request));
     }
 
-    /** Updates the calorie target offset from the inline editor on the dashboard. */
+    /** Partial profile update — weight, age, goal, activity level, calorie offset. */
     @PatchMapping
     public ResponseEntity<UserProfileResponse> updateProfile(
             Authentication auth,
             @Valid @RequestBody UpdateProfileRequest request) {
         String userId = (String) auth.getPrincipal();
-        return ResponseEntity.ok(profileService.updateCalorieOffset(userId, request));
+        return ResponseEntity.ok(profileService.updateProfile(userId, request));
     }
 }

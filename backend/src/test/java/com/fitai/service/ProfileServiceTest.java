@@ -136,7 +136,7 @@ class ProfileServiceTest {
     }
 
     @Test
-    void updateCalorieOffset_savesNewValue() {
+    void updateProfile_savesNewCalorieOffset() {
         UserProfile existing = sampleProfile("user-6");
         when(repository.findByUserId("user-6")).thenReturn(Optional.of(existing));
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -144,19 +144,37 @@ class ProfileServiceTest {
         UpdateProfileRequest req = new UpdateProfileRequest();
         req.setCalorieTargetOffset(300);
 
-        UserProfileResponse response = service.updateCalorieOffset("user-6", req);
+        UserProfileResponse response = service.updateProfile("user-6", req);
 
         assertThat(response.getCalorieTargetOffset()).isEqualTo(300);
     }
 
     @Test
-    void updateCalorieOffset_throws404_whenProfileNotFound() {
+    void updateProfile_updatesWeightAndGoal() {
+        UserProfile existing = sampleProfile("user-6");
+        when(repository.findByUserId("user-6")).thenReturn(Optional.of(existing));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateProfileRequest req = new UpdateProfileRequest();
+        req.setWeightKg(new BigDecimal("65.0"));
+        req.setGoal("bulking");
+
+        UserProfileResponse response = service.updateProfile("user-6", req);
+
+        assertThat(response.getWeightKg()).isEqualByComparingTo(new BigDecimal("65.0"));
+        assertThat(response.getGoal()).isEqualTo("bulking");
+        // Fields not in request remain unchanged
+        assertThat(response.getName()).isEqualTo("Alice");
+    }
+
+    @Test
+    void updateProfile_throws404_whenProfileNotFound() {
         when(repository.findByUserId("user-7")).thenReturn(Optional.empty());
 
         UpdateProfileRequest req = new UpdateProfileRequest();
         req.setCalorieTargetOffset(400);
 
-        assertThatThrownBy(() -> service.updateCalorieOffset("user-7", req))
+        assertThatThrownBy(() -> service.updateProfile("user-7", req))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("404");
     }

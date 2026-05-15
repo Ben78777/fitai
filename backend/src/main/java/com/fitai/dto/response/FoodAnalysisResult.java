@@ -13,19 +13,18 @@ public class FoodAnalysisResult {
     private double carbsG;
     private double fatG;
 
+    // Micronutrients — nullable (not all foods have this data available)
+    private Double fiberG;
+    private Double sugarG;
+    private Double sodiumMg;
+    private Double potassiumMg;
+    private Double vitaminCMg;
+    private Double vitaminDMcg;
+    private Double calciumMg;
+    private Double ironMg;
+
     // No-arg constructor required for Jackson deserialization
     public FoodAnalysisResult() {}
-
-    public FoodAnalysisResult(String foodName, double quantityG,
-                              double calories, double proteinG,
-                              double carbsG, double fatG) {
-        this.foodName  = foodName;
-        this.quantityG = quantityG;
-        this.calories  = calories;
-        this.proteinG  = proteinG;
-        this.carbsG    = carbsG;
-        this.fatG      = fatG;
-    }
 
     public String getFoodName()  { return foodName; }
     public double getQuantityG() { return quantityG; }
@@ -33,6 +32,14 @@ public class FoodAnalysisResult {
     public double getProteinG()  { return proteinG; }
     public double getCarbsG()    { return carbsG; }
     public double getFatG()      { return fatG; }
+    public Double getFiberG()    { return fiberG; }
+    public Double getSugarG()    { return sugarG; }
+    public Double getSodiumMg()  { return sodiumMg; }
+    public Double getPotassiumMg() { return potassiumMg; }
+    public Double getVitaminCMg()  { return vitaminCMg; }
+    public Double getVitaminDMcg() { return vitaminDMcg; }
+    public Double getCalciumMg()   { return calciumMg; }
+    public Double getIronMg()      { return ironMg; }
 
     public void setFoodName(String foodName)   { this.foodName  = foodName; }
     public void setQuantityG(double quantityG) { this.quantityG = quantityG; }
@@ -40,4 +47,12 @@ public class FoodAnalysisResult {
     public void setProteinG(double proteinG)   { this.proteinG  = proteinG; }
     public void setCarbsG(double carbsG)       { this.carbsG    = carbsG; }
     public void setFatG(double fatG)           { this.fatG      = fatG; }
+    public void setFiberG(Double fiberG)       { this.fiberG    = fiberG; }
+    public void setSugarG(Double sugarG)       { this.sugarG    = sugarG; }
+    public void setSodiumMg(Double sodiumMg)   { this.sodiumMg  = sodiumMg; }
+    public void setPotassiumMg(Double v)       { this.potassiumMg = v; }
+    public void setVitaminCMg(Double v)        { this.vitaminCMg  = v; }
+    public void setVitaminDMcg(Double v)       { this.vitaminDMcg = v; }
+    public void setCalciumMg(Double v)         { this.calciumMg   = v; }
+    public void setIronMg(Double v)            { this.ironMg      = v; }
 }

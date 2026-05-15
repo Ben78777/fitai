@@ -42,7 +42,8 @@ public class ChatService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile not found"));
 
         // All computed progress numbers (reuses ProgressService to avoid duplicating logic)
-        ProgressResponse progress = progressService.getProgress(userId);
+        // Chat always gives context for today (not a navigated historical date)
+        ProgressResponse progress = progressService.getProgress(userId, LocalDate.now());
 
         // Today's macros — sum all entries for today
         List<MealEntry> todayEntries = mealEntryRepository

@@ -6,17 +6,26 @@ import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import Onboarding from './components/Onboarding';
 
+function Spinner() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="w-7 h-7 border-[3px] border-green-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
 export default function App() {
-  const [session,    setSession]    = useState<Session | null>(null);
-  const [loading,    setLoading]    = useState(true);
-  const [hasProfile, setHasProfile] = useState(false);
+  const [session,          setSession]          = useState<Session | null>(null);
+  const [loading,          setLoading]          = useState(true);
+  // Separate flag for the SIGNED_IN path — prevents onboarding flash for existing users
+  const [profileChecking,  setProfileChecking]  = useState(false);
+  const [hasProfile,       setHasProfile]       = useState(false);
 
   useEffect(() => {
     // ── Initial load ─────────────────────────────────────────────────────────
     // getSession() reads from local storage — fast, no network call.
-    // If a session exists we do one profile check to pick the right screen.
-    // setLoading(false) is guaranteed to run via .finally(), so we never
-    // get stuck on the loading spinner regardless of what the backend returns.
+    // We hold the loading spinner until the profile check completes so the
+    // user never sees onboarding for a split second.
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (!session) {
@@ -34,16 +43,19 @@ export default function App() {
     // INITIAL_SESSION, which would re-enter the loading state unnecessarily.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, newSession) => {
-        setSession(newSession);
-
         if (event === 'SIGNED_IN') {
-          // User just logged in — check for a profile without blocking the UI
+          setSession(newSession);
+          // Block rendering until we know whether the profile exists —
+          // without this guard, hasProfile=false would flash Onboarding.
+          setProfileChecking(true);
           getProfile()
             .then(() => setHasProfile(true))
-            .catch(() => setHasProfile(false));
+            .catch(() => setHasProfile(false))
+            .finally(() => setProfileChecking(false));
         }
 
         if (event === 'SIGNED_OUT') {
+          setSession(null);
           setHasProfile(false);
         }
       }
@@ -52,13 +64,7 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-gray-400 text-sm">Loading…</p>
-      </div>
-    );
-  }
+  if (loading || profileChecking) return <Spinner />;
 
   if (!session)    return <Auth />;
   if (!hasProfile) return <Onboarding onComplete={() => setHasProfile(true)} />;

@@ -48,12 +48,20 @@ public class ProfileService {
         return toResponse(repository.save(profile));
     }
 
-    /** Updates only the calorie target offset — used by the inline editor on the dashboard. */
-    public UserProfileResponse updateCalorieOffset(String userId, UpdateProfileRequest request) {
+    /**
+     * Partial update — applies only the non-null fields from the request.
+     * Allows editing weight, age, goal, activity level, and calorie offset.
+     */
+    public UserProfileResponse updateProfile(String userId, UpdateProfileRequest request) {
         UserProfile profile = repository.findByUserId(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile not found"));
 
-        profile.setCalorieTargetOffset(request.getCalorieTargetOffset());
+        if (request.getWeightKg() != null)          profile.setWeightKg(request.getWeightKg());
+        if (request.getAge() != null)                profile.setAge(request.getAge());
+        if (request.getGoal() != null)               profile.setGoal(request.getGoal());
+        if (request.getActivityLevel() != null)      profile.setActivityLevel(request.getActivityLevel());
+        if (request.getCalorieTargetOffset() != null) profile.setCalorieTargetOffset(request.getCalorieTargetOffset());
+
         return toResponse(repository.save(profile));
     }
 

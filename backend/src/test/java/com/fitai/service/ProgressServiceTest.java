@@ -73,7 +73,7 @@ class ProgressServiceTest {
                 .thenReturn(Optional.of(profile("u1", "female", 28, 62.5, 168.0, "cutting", "sedentary", 500)));
         stubEntries("u1", 1000, 3000, 3);
 
-        ProgressResponse r = service.getProgress("u1");
+        ProgressResponse r = service.getProgress("u1", LocalDate.of(2026, 5, 10));
 
         assertThat(r.getDailyCalorieTarget()).isEqualTo(1149);
         assertThat(r.getTodayCalories()).isEqualTo(1000);
@@ -101,7 +101,7 @@ class ProgressServiceTest {
                 .thenReturn(Optional.of(profile("u2", "male", 30, 80.0, 180.0, "bulking", "moderately_active", 300)));
         stubEntries("u2", 3500, 7000, 2);
 
-        ProgressResponse r = service.getProgress("u2");
+        ProgressResponse r = service.getProgress("u2", LocalDate.of(2026, 5, 10));
 
         assertThat(r.getDailyCalorieTarget()).isEqualTo(3059);
         assertThat(r.getTodayCalories()).isEqualTo(3500);
@@ -123,7 +123,7 @@ class ProgressServiceTest {
                 .thenReturn(Optional.of(profile("u3", "male", 30, 80.0, 180.0, "maintenance", "lightly_active", 500)));
         stubEntries("u3", 2500, 2500, 1);
 
-        ProgressResponse r = service.getProgress("u3");
+        ProgressResponse r = service.getProgress("u3", LocalDate.of(2026, 5, 10));
 
         assertThat(r.getDailyCalorieTarget()).isEqualTo(2448);
         assertThat(r.getTodaySurplusDeficit()).isEqualTo(52);
@@ -139,7 +139,7 @@ class ProgressServiceTest {
         when(mealEntryRepository.sumAllCaloriesByUserId("u4")).thenReturn(null);
         when(mealEntryRepository.countDistinctDatesWithEntries("u4")).thenReturn(0L);
 
-        ProgressResponse r = service.getProgress("u4");
+        ProgressResponse r = service.getProgress("u4", LocalDate.of(2026, 5, 10));
 
         assertThat(r.getTodayCalories()).isEqualTo(0);
         assertThat(r.getAccumulatedSurplusDeficit()).isEqualTo(0);
@@ -150,7 +150,7 @@ class ProgressServiceTest {
     void missingProfile_throws404() {
         when(profileRepository.findByUserId("u5")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.getProgress("u5"))
+        assertThatThrownBy(() -> service.getProgress("u5", LocalDate.now()))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("404");
     }

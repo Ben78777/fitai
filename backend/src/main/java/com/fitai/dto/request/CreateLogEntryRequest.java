@@ -37,6 +37,16 @@ public class CreateLogEntryRequest {
     @DecimalMin(value = "0.0", message = "fatG cannot be negative")
     private BigDecimal fatG;
 
+    // Micronutrients — all optional; null means data was not available
+    private BigDecimal fiberG;
+    private BigDecimal sugarG;
+    private BigDecimal sodiumMg;
+    private BigDecimal potassiumMg;
+    private BigDecimal vitaminCMg;
+    private BigDecimal vitaminDMcg;
+    private BigDecimal calciumMg;
+    private BigDecimal ironMg;
+
     // --- Getters and Setters ---
 
     public LocalDate getDate() { return date; }
@@ -62,4 +72,28 @@ public class CreateLogEntryRequest {
 
     public BigDecimal getFatG() { return fatG; }
     public void setFatG(BigDecimal fatG) { this.fatG = fatG; }
+
+    public BigDecimal getFiberG() { return fiberG; }
+    public void setFiberG(BigDecimal fiberG) { this.fiberG = fiberG; }
+
+    public BigDecimal getSugarG() { return sugarG; }
+    public void setSugarG(BigDecimal sugarG) { this.sugarG = sugarG; }
+
+    public BigDecimal getSodiumMg() { return sodiumMg; }
+    public void setSodiumMg(BigDecimal sodiumMg) { this.sodiumMg = sodiumMg; }
+
+    public BigDecimal getPotassiumMg() { return potassiumMg; }
+    public void setPotassiumMg(BigDecimal potassiumMg) { this.potassiumMg = potassiumMg; }
+
+    public BigDecimal getVitaminCMg() { return vitaminCMg; }
+    public void setVitaminCMg(BigDecimal vitaminCMg) { this.vitaminCMg = vitaminCMg; }
+
+    public BigDecimal getVitaminDMcg() { return vitaminDMcg; }
+    public void setVitaminDMcg(BigDecimal vitaminDMcg) { this.vitaminDMcg = vitaminDMcg; }
+
+    public BigDecimal getCalciumMg() { return calciumMg; }
+    public void setCalciumMg(BigDecimal calciumMg) { this.calciumMg = calciumMg; }
+
+    public BigDecimal getIronMg() { return ironMg; }
+    public void setIronMg(BigDecimal ironMg) { this.ironMg = ironMg; }
 }

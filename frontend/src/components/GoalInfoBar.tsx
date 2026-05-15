@@ -71,7 +71,7 @@ export default function GoalInfoBar({ progressData, onOffsetSaved }: Props) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 pb-3 flex items-center gap-3 flex-wrap">
+    <div className="max-w-2xl mx-auto px-4 pb-2 flex items-center gap-3 flex-wrap">
 
       {/* Goal badge */}
       <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border ${config.colorCls}`}>

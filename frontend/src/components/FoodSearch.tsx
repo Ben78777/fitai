@@ -9,17 +9,26 @@ interface Props {
   onClose: () => void;
 }
 
-// Scale an item's macros when the user edits the quantity
+// Scale all macros and micronutrients proportionally when the user edits quantity
 function scaleItem(item: FoodAnalysisItem, newQty: number): FoodAnalysisItem {
   const scale = item.quantityG > 0 ? newQty / item.quantityG : 1;
-  const r = (n: number) => Math.round(n * 10) / 10;
+  const r  = (n: number) => Math.round(n * 10) / 10;
+  const rn = (n: number | null | undefined) => n != null ? r(n * scale) : null;
   return {
-    foodName:  item.foodName,
-    quantityG: newQty,
-    calories:  r(item.calories  * scale),
-    proteinG:  r(item.proteinG  * scale),
-    carbsG:    r(item.carbsG    * scale),
-    fatG:      r(item.fatG      * scale),
+    foodName:    item.foodName,
+    quantityG:   newQty,
+    calories:    r(item.calories  * scale),
+    proteinG:    r(item.proteinG  * scale),
+    carbsG:      r(item.carbsG    * scale),
+    fatG:        r(item.fatG      * scale),
+    fiberG:      rn(item.fiberG),
+    sugarG:      rn(item.sugarG),
+    sodiumMg:    rn(item.sodiumMg),
+    potassiumMg: rn(item.potassiumMg),
+    vitaminCMg:  rn(item.vitaminCMg),
+    vitaminDMcg: rn(item.vitaminDMcg),
+    calciumMg:   rn(item.calciumMg),
+    ironMg:      rn(item.ironMg),
   };
 }
 
@@ -121,12 +130,20 @@ export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) 
         await addLogEntry({
           date,
           mealType,
-          foodName:  scaled.foodName,
-          quantityG: scaled.quantityG,
-          calories:  scaled.calories,
-          proteinG:  scaled.proteinG,
-          carbsG:    scaled.carbsG,
-          fatG:      scaled.fatG,
+          foodName:    scaled.foodName,
+          quantityG:   scaled.quantityG,
+          calories:    scaled.calories,
+          proteinG:    scaled.proteinG,
+          carbsG:      scaled.carbsG,
+          fatG:        scaled.fatG,
+          fiberG:      scaled.fiberG,
+          sugarG:      scaled.sugarG,
+          sodiumMg:    scaled.sodiumMg,
+          potassiumMg: scaled.potassiumMg,
+          vitaminCMg:  scaled.vitaminCMg,
+          vitaminDMcg: scaled.vitaminDMcg,
+          calciumMg:   scaled.calciumMg,
+          ironMg:      scaled.ironMg,
         });
       }
       onAdded();
@@ -315,6 +332,42 @@ export default function FoodSearch({ mealType, date, onAdded, onClose }: Props) 
                 )}
               </table>
             </div>
+
+            {/* Micronutrient preview — shown when the AI returned micro data */}
+            {items.some(it => it.sodiumMg != null || it.fiberG != null) && (
+              <div className="mb-3 px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-100 text-xs text-gray-600">
+                <p className="font-medium text-gray-700 mb-1.5">Micronutrients (scaled total)</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {(() => {
+                    const mt = items.reduce((acc, item, i) => {
+                      const qty = parseFloat(qtys[i]);
+                      const s = scaleItem(item, isNaN(qty) || qty <= 0 ? item.quantityG : qty);
+                      return {
+                        fiberG:      (acc.fiberG      ?? 0) + (s.fiberG      ?? 0),
+                        sugarG:      (acc.sugarG      ?? 0) + (s.sugarG      ?? 0),
+                        sodiumMg:    (acc.sodiumMg    ?? 0) + (s.sodiumMg    ?? 0),
+                        potassiumMg: (acc.potassiumMg ?? 0) + (s.potassiumMg ?? 0),
+                        vitaminCMg:  (acc.vitaminCMg  ?? 0) + (s.vitaminCMg  ?? 0),
+                        vitaminDMcg: (acc.vitaminDMcg ?? 0) + (s.vitaminDMcg ?? 0),
+                        calciumMg:   (acc.calciumMg   ?? 0) + (s.calciumMg   ?? 0),
+                        ironMg:      (acc.ironMg      ?? 0) + (s.ironMg      ?? 0),
+                      };
+                    }, {} as Record<string, number>);
+                    const r = (n: number) => Math.round(n * 10) / 10;
+                    return [
+                      mt.fiberG      != null && <span key="f">Fiber {r(mt.fiberG)}g</span>,
+                      mt.sugarG      != null && <span key="s">Sugar {r(mt.sugarG)}g</span>,
+                      mt.sodiumMg    != null && <span key="na">Sodium {r(mt.sodiumMg)}mg</span>,
+                      mt.potassiumMg != null && <span key="k">Potassium {r(mt.potassiumMg)}mg</span>,
+                      mt.vitaminCMg  != null && <span key="vc">Vit C {r(mt.vitaminCMg)}mg</span>,
+                      mt.vitaminDMcg != null && <span key="vd">Vit D {r(mt.vitaminDMcg)}mcg</span>,
+                      mt.calciumMg   != null && <span key="ca">Calcium {r(mt.calciumMg)}mg</span>,
+                      mt.ironMg      != null && <span key="fe">Iron {r(mt.ironMg)}mg</span>,
+                    ].filter(Boolean);
+                  })()}
+                </div>
+              </div>
+            )}
 
             <button
               onClick={handleLog}

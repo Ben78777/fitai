@@ -23,15 +23,20 @@ public class ProgressService {
         this.mealEntryRepository = mealEntryRepository;
     }
 
-    public ProgressResponse getProgress(String userId) {
+    /**
+     * Calculates progress for a specific date.
+     * "Today's" calories and surplus/deficit reflect the given date;
+     * accumulated stats always span all-time entries.
+     */
+    public ProgressResponse getProgress(String userId, LocalDate date) {
         UserProfile profile = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile not found"));
 
         int tdee        = computeTdee(profile);
         int dailyTarget = applyGoalOffset(tdee, profile.getGoal(), profile.getCalorieTargetOffset());
 
-        // Today's intake (null when no entries exist yet)
-        BigDecimal rawToday = mealEntryRepository.sumCaloriesForDay(userId, LocalDate.now());
+        // Calories for the requested date (null when no entries exist yet for that day)
+        BigDecimal rawToday = mealEntryRepository.sumCaloriesForDay(userId, date);
         int todayCalories = rawToday != null ? (int) Math.round(rawToday.doubleValue()) : 0;
         int todaySurplusDeficit = todayCalories - dailyTarget;
 
