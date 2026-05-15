@@ -41,6 +41,15 @@ export interface CreateProfilePayload {
   calorieTargetOffset?: number;
 }
 
+export interface ProgressData {
+  dailyCalorieTarget: number;
+  todayCalories: number;
+  todaySurplusDeficit: number;       // positive = surplus, negative = deficit
+  accumulatedSurplusDeficit: number;
+  estimatedWeightChangeKg: number;   // positive = gain, negative = loss
+  goal: string;                      // "cutting" | "bulking" | "maintenance"
+}
+
 export interface CreateLogEntryPayload {
   date: string;           // ISO date string YYYY-MM-DD
   mealType: MealType;

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { getLog } from '../lib/api';
+import { getLog, getProgress } from '../lib/api';
 import MacroSummary from './MacroSummary';
 import DailyLog from './DailyLog';
-import type { LogEntry } from '../types';
+import ProgressDashboard from './ProgressDashboard';
+import type { LogEntry, ProgressData } from '../types';
 
 // ── Date helpers (all local-time — avoids UTC midnight off-by-one) ──────────
 
@@ -56,10 +57,11 @@ function ChevronRight() {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const [selectedDate, setSelectedDate] = useState(getToday);
-  const [entries,      setEntries]      = useState<LogEntry[]>([]);
-  const [initialLoad,  setInitialLoad]  = useState(true);
-  const [fetching,     setFetching]     = useState(false);
+  const [selectedDate,  setSelectedDate]  = useState(getToday);
+  const [entries,       setEntries]       = useState<LogEntry[]>([]);
+  const [progressData,  setProgressData]  = useState<ProgressData | null>(null);
+  const [initialLoad,   setInitialLoad]   = useState(true);
+  const [fetching,      setFetching]      = useState(false);
 
   const isToday = selectedDate === getToday();
 
@@ -78,9 +80,27 @@ export default function Dashboard() {
     }
   }, [selectedDate]);
 
+  // Progress is always today-centric — fetched independently of date navigation
+  async function fetchProgressData() {
+    try {
+      setProgressData(await getProgress());
+    } catch { /* silently fail — card just stays hidden */ }
+  }
+
+  // Re-fetch log whenever selectedDate changes (and on mount)
   useEffect(() => {
     fetchLog();
   }, [fetchLog]);
+
+  // Fetch progress once on mount
+  useEffect(() => {
+    fetchProgressData();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Called by DailyLog after any add/remove — keeps progress in sync
+  async function handleRefresh() {
+    await Promise.all([fetchLog(), fetchProgressData()]);
+  }
 
   function goBack()    { setSelectedDate(prev => shiftDate(prev, -1)); }
   function goForward() { if (!isToday) setSelectedDate(prev => shiftDate(prev, +1)); }
@@ -152,8 +172,9 @@ export default function Dashboard() {
         ) : (
           // Dim the content while a new day's data is loading
           <div className={fetching ? 'opacity-50 pointer-events-none transition-opacity' : 'transition-opacity'}>
+            {progressData && <ProgressDashboard data={progressData} />}
             <MacroSummary entries={entries} />
-            <DailyLog entries={entries} date={selectedDate} onRefresh={fetchLog} />
+            <DailyLog entries={entries} date={selectedDate} onRefresh={handleRefresh} />
           </div>
         )}
       </main>

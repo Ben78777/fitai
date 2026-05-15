@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { supabase } from './supabase';
-import type { CreateLogEntryPayload, CreateProfilePayload, FoodAnalysisItem, LogEntry, UserProfile } from '../types';
+import type { CreateLogEntryPayload, CreateProfilePayload, FoodAnalysisItem, LogEntry, ProgressData, UserProfile } from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -51,5 +51,12 @@ export async function getProfile(): Promise<UserProfile> {
 
 export async function createProfile(payload: CreateProfilePayload): Promise<UserProfile> {
   const { data } = await api.post<UserProfile>('/api/v1/profile', payload);
+  return data;
+}
+
+// ── Progress ───────────────────────────────────────────────────────
+
+export async function getProgress(): Promise<ProgressData> {
+  const { data } = await api.get<ProgressData>('/api/v1/progress');
   return data;
 }
