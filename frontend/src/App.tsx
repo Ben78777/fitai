@@ -12,44 +12,45 @@ export default function App() {
   const [hasProfile, setHasProfile] = useState(false);
 
   useEffect(() => {
-    // On first load: get the active session, then check for a profile if one exists.
-    // We keep loading=true until both checks are done so there is no flash.
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    // ── Initial load ─────────────────────────────────────────────────────────
+    // getSession() reads from local storage — fast, no network call.
+    // If a session exists we do one profile check to pick the right screen.
+    // setLoading(false) is guaranteed to run via .finally(), so we never
+    // get stuck on the loading spinner regardless of what the backend returns.
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) {
-        await checkProfile();
+      if (!session) {
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+      getProfile()
+        .then(() => setHasProfile(true))
+        .catch(() => setHasProfile(false)) // 404 → no profile yet → show onboarding
+        .finally(() => setLoading(false));
     });
 
-    // React to login / logout events after the initial load
+    // ── Subsequent auth events ────────────────────────────────────────────────
+    // We only react to SIGNED_IN / SIGNED_OUT here — NOT to TOKEN_REFRESHED or
+    // INITIAL_SESSION, which would re-enter the loading state unnecessarily.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (session) {
-          setLoading(true);
-          setSession(session);
-          await checkProfile();
-          setLoading(false);
-        } else {
-          setSession(null);
+      (event, newSession) => {
+        setSession(newSession);
+
+        if (event === 'SIGNED_IN') {
+          // User just logged in — check for a profile without blocking the UI
+          getProfile()
+            .then(() => setHasProfile(true))
+            .catch(() => setHasProfile(false));
+        }
+
+        if (event === 'SIGNED_OUT') {
           setHasProfile(false);
-          setLoading(false);
         }
       }
     );
 
     return () => subscription.unsubscribe();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function checkProfile() {
-    try {
-      await getProfile();
-      setHasProfile(true);
-    } catch {
-      // 404 means no profile yet — show onboarding
-      setHasProfile(false);
-    }
-  }
+  }, []);
 
   if (loading) {
     return (
@@ -59,7 +60,7 @@ export default function App() {
     );
   }
 
-  if (!session) return <Auth />;
+  if (!session)    return <Auth />;
   if (!hasProfile) return <Onboarding onComplete={() => setHasProfile(true)} />;
   return <Dashboard />;
 }
