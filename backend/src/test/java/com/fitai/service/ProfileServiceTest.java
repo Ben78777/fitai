@@ -1,6 +1,7 @@
 package com.fitai.service;
 
 import com.fitai.dto.request.CreateProfileRequest;
+import com.fitai.dto.request.UpdateProfileRequest;
 import com.fitai.dto.response.UserProfileResponse;
 import com.fitai.model.UserProfile;
 import com.fitai.repository.UserProfileRepository;
@@ -39,6 +40,7 @@ class ProfileServiceTest {
         p.setWeightKg(new BigDecimal("62.5"));
         p.setHeightCm(new BigDecimal("168.0"));
         p.setGoal("cutting");
+        p.setActivityLevel("moderately_active");
         p.setCalorieTargetOffset(500);
         return p;
     }
@@ -51,6 +53,7 @@ class ProfileServiceTest {
 
         assertThat(response.getName()).isEqualTo("Alice");
         assertThat(response.getGoal()).isEqualTo("cutting");
+        assertThat(response.getActivityLevel()).isEqualTo("moderately_active");
         assertThat(response.getCalorieTargetOffset()).isEqualTo(500);
     }
 
@@ -68,7 +71,7 @@ class ProfileServiceTest {
         when(repository.findByUserId("user-3")).thenReturn(Optional.empty());
         when(repository.save(any())).thenAnswer(inv -> {
             UserProfile p = inv.getArgument(0);
-            p.setId(UUID.randomUUID()); // simulate DB-generated ID
+            p.setId(UUID.randomUUID());
             return p;
         });
 
@@ -79,12 +82,14 @@ class ProfileServiceTest {
         req.setWeightKg(new BigDecimal("80.0"));
         req.setHeightCm(new BigDecimal("180.0"));
         req.setGoal("bulking");
+        req.setActivityLevel("very_active");
         req.setCalorieTargetOffset(300);
 
         UserProfileResponse response = service.createProfile("user-3", req);
 
         assertThat(response.getName()).isEqualTo("Bob");
         assertThat(response.getGoal()).isEqualTo("bulking");
+        assertThat(response.getActivityLevel()).isEqualTo("very_active");
         assertThat(response.getCalorieTargetOffset()).isEqualTo(300);
     }
 
@@ -104,6 +109,7 @@ class ProfileServiceTest {
         req.setWeightKg(new BigDecimal("55.0"));
         req.setHeightCm(new BigDecimal("160.0"));
         req.setGoal("maintenance");
+        req.setActivityLevel("sedentary");
         // calorieTargetOffset intentionally not set
 
         UserProfileResponse response = service.createProfile("user-4", req);
@@ -122,9 +128,36 @@ class ProfileServiceTest {
         req.setWeightKg(new BigDecimal("90.0"));
         req.setHeightCm(new BigDecimal("185.0"));
         req.setGoal("cutting");
+        req.setActivityLevel("lightly_active");
 
         assertThatThrownBy(() -> service.createProfile("user-5", req))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("409");
+    }
+
+    @Test
+    void updateCalorieOffset_savesNewValue() {
+        UserProfile existing = sampleProfile("user-6");
+        when(repository.findByUserId("user-6")).thenReturn(Optional.of(existing));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateProfileRequest req = new UpdateProfileRequest();
+        req.setCalorieTargetOffset(300);
+
+        UserProfileResponse response = service.updateCalorieOffset("user-6", req);
+
+        assertThat(response.getCalorieTargetOffset()).isEqualTo(300);
+    }
+
+    @Test
+    void updateCalorieOffset_throws404_whenProfileNotFound() {
+        when(repository.findByUserId("user-7")).thenReturn(Optional.empty());
+
+        UpdateProfileRequest req = new UpdateProfileRequest();
+        req.setCalorieTargetOffset(400);
+
+        assertThatThrownBy(() -> service.updateCalorieOffset("user-7", req))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("404");
     }
 }

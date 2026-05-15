@@ -6,11 +6,20 @@ interface Props {
 }
 
 type Goal = 'cutting' | 'bulking' | 'maintenance';
+type ActivityLevel = 'sedentary' | 'lightly_active' | 'moderately_active' | 'very_active' | 'extremely_active';
 
 const GOALS: { value: Goal; label: string; description: string }[] = [
   { value: 'cutting',     label: '🔥 Cutting',               description: 'Lose body fat'    },
   { value: 'bulking',     label: '💪 Bulking',               description: 'Gain muscle mass' },
   { value: 'maintenance', label: '⚖️ Just counting calories', description: 'Maintain weight'  },
+];
+
+const ACTIVITY_LEVELS: { value: ActivityLevel; label: string; description: string }[] = [
+  { value: 'sedentary',         label: 'Sedentary',         description: '0 — office job, no exercise'  },
+  { value: 'lightly_active',    label: 'Lightly active',    description: '1–2 times/week'               },
+  { value: 'moderately_active', label: 'Moderately active', description: '3–4 times/week'               },
+  { value: 'very_active',       label: 'Very active',       description: '5–6 times/week'               },
+  { value: 'extremely_active',  label: 'Extremely active',  description: 'Every day, intense'           },
 ];
 
 export default function Onboarding({ onComplete }: Props) {
@@ -20,6 +29,7 @@ export default function Onboarding({ onComplete }: Props) {
   const [weightKg,            setWeightKg]            = useState('');
   const [heightCm,            setHeightCm]            = useState('');
   const [goal,                setGoal]                = useState<Goal | ''>('');
+  const [activityLevel,       setActivityLevel]       = useState<ActivityLevel | ''>('');
   const [calorieTargetOffset, setCalorieTargetOffset] = useState('500');
   const [loading,             setLoading]             = useState(false);
   const [error,               setError]               = useState('');
@@ -30,7 +40,7 @@ export default function Onboarding({ onComplete }: Props) {
     ? 'Daily deficit target (kcal)'
     : 'Daily surplus target (kcal)';
 
-  const canSubmit = name.trim() && gender && age && weightKg && heightCm && goal;
+  const canSubmit = name.trim() && gender && age && weightKg && heightCm && activityLevel && goal;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,6 +56,7 @@ export default function Onboarding({ onComplete }: Props) {
         weightKg:            parseFloat(weightKg),
         heightCm:            parseFloat(heightCm),
         goal,
+        activityLevel:       activityLevel as ActivityLevel,
         // For maintenance the offset is unused — pass the default so the column is never null
         calorieTargetOffset: showCalorieTarget ? parseInt(calorieTargetOffset, 10) : 500,
       });
@@ -147,6 +158,30 @@ export default function Onboarding({ onComplete }: Props) {
                 placeholder="175"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
               />
+            </div>
+          </div>
+
+          {/* Activity level */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              How many times do you work out per week?
+            </label>
+            <div className="flex flex-col gap-2">
+              {ACTIVITY_LEVELS.map(({ value, label, description }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setActivityLevel(value)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm border text-left transition-colors ${
+                    activityLevel === value
+                      ? 'bg-green-50 border-green-400 text-green-800'
+                      : 'border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="font-medium flex-1">{label}</span>
+                  <span className="text-gray-400 text-xs">{description}</span>
+                </button>
+              ))}
             </div>
           </div>
 

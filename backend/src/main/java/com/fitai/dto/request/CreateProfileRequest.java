@@ -27,6 +27,9 @@ public class CreateProfileRequest {
     @NotBlank(message = "Goal must not be blank")
     private String goal;
 
+    @NotBlank(message = "Activity level must not be blank")
+    private String activityLevel;
+
     // Optional — service defaults to 500 when null
     private Integer calorieTargetOffset;
 
@@ -49,6 +52,9 @@ public class CreateProfileRequest {
 
     public String getGoal() { return goal; }
     public void setGoal(String goal) { this.goal = goal; }
+
+    public String getActivityLevel() { return activityLevel; }
+    public void setActivityLevel(String activityLevel) { this.activityLevel = activityLevel; }
 
     public Integer getCalorieTargetOffset() { return calorieTargetOffset; }
     public void setCalorieTargetOffset(Integer calorieTargetOffset) { this.calorieTargetOffset = calorieTargetOffset; }

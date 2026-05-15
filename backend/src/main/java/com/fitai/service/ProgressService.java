@@ -51,27 +51,41 @@ public class ProgressService {
                 todaySurplusDeficit,
                 accumulatedRounded,
                 estimatedWeightChange,
-                profile.getGoal());
+                profile.getGoal(),
+                profile.getCalorieTargetOffset());
     }
 
-    // ── Mifflin-St Jeor BMR + goal offset ────────────────────────────────────
+    // ── Mifflin-St Jeor TDEE = BMR × activity multiplier + goal offset ────────
 
     private int computeDailyTarget(UserProfile profile) {
         double weight = profile.getWeightKg().doubleValue();
         double height = profile.getHeightCm().doubleValue();
         int    age    = profile.getAge();
 
-        // Base formula — same for both genders up to the constant
+        // BMR — constant differs by gender
         double bmr = (10.0 * weight) + (6.25 * height) - (5.0 * age);
         bmr += "male".equalsIgnoreCase(profile.getGender()) ? 5 : -161;
 
-        int bmrRounded = (int) Math.round(bmr);
-        int offset = profile.getCalorieTargetOffset();
+        // Apply Harris-Benedict activity multiplier to get TDEE
+        double tdee = bmr * activityMultiplier(profile.getActivityLevel());
+        int tdeeRounded = (int) Math.round(tdee);
 
+        int offset = profile.getCalorieTargetOffset();
         return switch (profile.getGoal()) {
-            case "cutting"  -> bmrRounded - offset;
-            case "bulking"  -> bmrRounded + offset;
-            default         -> bmrRounded; // maintenance — no offset
+            case "cutting"  -> tdeeRounded - offset;
+            case "bulking"  -> tdeeRounded + offset;
+            default         -> tdeeRounded; // maintenance — no offset
+        };
+    }
+
+    private double activityMultiplier(String activityLevel) {
+        if (activityLevel == null) return 1.2; // guard for legacy profiles without this field
+        return switch (activityLevel) {
+            case "lightly_active"    -> 1.375;
+            case "moderately_active" -> 1.55;
+            case "very_active"       -> 1.725;
+            case "extremely_active"  -> 1.9;
+            default                  -> 1.2; // sedentary
         };
     }
 }

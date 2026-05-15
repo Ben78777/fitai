@@ -4,6 +4,7 @@ import { getLog, getProgress } from '../lib/api';
 import MacroSummary from './MacroSummary';
 import DailyLog from './DailyLog';
 import ProgressDashboard from './ProgressDashboard';
+import GoalInfoBar from './GoalInfoBar';
 import type { LogEntry, ProgressData } from '../types';
 
 // ── Date helpers (all local-time — avoids UTC midnight off-by-one) ──────────
@@ -124,6 +125,14 @@ export default function Dashboard() {
             Logout
           </button>
         </div>
+
+        {/* Goal info bar — shown once progress data is loaded */}
+        {progressData && (
+          <GoalInfoBar
+            progressData={progressData}
+            onOffsetSaved={fetchProgressData}
+          />
+        )}
 
         {/* Date navigation row */}
         <div className="max-w-2xl mx-auto px-4 pb-3 flex items-center justify-center gap-3">

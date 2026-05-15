@@ -39,6 +39,10 @@ public class UserProfile {
     @Column(name = "calorie_target_offset", nullable = false)
     private Integer calorieTargetOffset = 500;
 
+    // "sedentary" | "lightly_active" | "moderately_active" | "very_active" | "extremely_active"
+    @Column(name = "activity_level", nullable = false)
+    private String activityLevel = "sedentary";
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -73,6 +77,9 @@ public class UserProfile {
 
     public Integer getCalorieTargetOffset() { return calorieTargetOffset; }
     public void setCalorieTargetOffset(Integer calorieTargetOffset) { this.calorieTargetOffset = calorieTargetOffset; }
+
+    public String getActivityLevel() { return activityLevel; }
+    public void setActivityLevel(String activityLevel) { this.activityLevel = activityLevel; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

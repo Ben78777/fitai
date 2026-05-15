@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { supabase } from './supabase';
-import type { CreateLogEntryPayload, CreateProfilePayload, FoodAnalysisItem, LogEntry, ProgressData, UserProfile } from '../types';
+import type { CreateLogEntryPayload, CreateProfilePayload, FoodAnalysisItem, LogEntry, ProgressData, UpdateProfilePayload, UserProfile } from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -51,6 +51,11 @@ export async function getProfile(): Promise<UserProfile> {
 
 export async function createProfile(payload: CreateProfilePayload): Promise<UserProfile> {
   const { data } = await api.post<UserProfile>('/api/v1/profile', payload);
+  return data;
+}
+
+export async function patchProfile(payload: UpdateProfilePayload): Promise<UserProfile> {
+  const { data } = await api.patch<UserProfile>('/api/v1/profile', payload);
   return data;
 }
 

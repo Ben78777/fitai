@@ -29,6 +29,7 @@ export interface UserProfile {
   heightCm: number;
   goal: string;
   calorieTargetOffset: number;
+  activityLevel: string;
 }
 
 export interface CreateProfilePayload {
@@ -38,16 +39,22 @@ export interface CreateProfilePayload {
   weightKg: number;
   heightCm: number;
   goal: string;
+  activityLevel: string;
   calorieTargetOffset?: number;
+}
+
+export interface UpdateProfilePayload {
+  calorieTargetOffset: number;
 }
 
 export interface ProgressData {
   dailyCalorieTarget: number;
   todayCalories: number;
-  todaySurplusDeficit: number;       // positive = surplus, negative = deficit
+  todaySurplusDeficit: number;        // positive = surplus, negative = deficit
   accumulatedSurplusDeficit: number;
-  estimatedWeightChangeKg: number;   // positive = gain, negative = loss
-  goal: string;                      // "cutting" | "bulking" | "maintenance"
+  estimatedWeightChangeKg: number;    // positive = gain, negative = loss
+  goal: string;                       // "cutting" | "bulking" | "maintenance"
+  calorieTargetOffset: number;        // current offset — for the inline editor
 }
 
 export interface CreateLogEntryPayload {

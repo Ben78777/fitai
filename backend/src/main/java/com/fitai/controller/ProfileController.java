@@ -1,6 +1,7 @@
 package com.fitai.controller;
 
 import com.fitai.dto.request.CreateProfileRequest;
+import com.fitai.dto.request.UpdateProfileRequest;
 import com.fitai.dto.response.UserProfileResponse;
 import com.fitai.service.ProfileService;
 import jakarta.validation.Valid;
@@ -34,5 +35,14 @@ public class ProfileController {
         String userId = (String) auth.getPrincipal();
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(profileService.createProfile(userId, request));
+    }
+
+    /** Updates the calorie target offset from the inline editor on the dashboard. */
+    @PatchMapping
+    public ResponseEntity<UserProfileResponse> updateProfile(
+            Authentication auth,
+            @Valid @RequestBody UpdateProfileRequest request) {
+        String userId = (String) auth.getPrincipal();
+        return ResponseEntity.ok(profileService.updateCalorieOffset(userId, request));
     }
 }

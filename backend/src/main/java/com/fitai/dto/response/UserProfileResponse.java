@@ -12,6 +12,7 @@ public class UserProfileResponse {
     private BigDecimal heightCm;
     private String goal;
     private int calorieTargetOffset;
+    private String activityLevel;
 
     public UserProfileResponse() {}
 
@@ -38,4 +39,7 @@ public class UserProfileResponse {
 
     public int getCalorieTargetOffset() { return calorieTargetOffset; }
     public void setCalorieTargetOffset(int calorieTargetOffset) { this.calorieTargetOffset = calorieTargetOffset; }
+
+    public String getActivityLevel() { return activityLevel; }
+    public void setActivityLevel(String activityLevel) { this.activityLevel = activityLevel; }
 }

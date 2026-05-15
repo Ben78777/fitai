@@ -34,7 +34,7 @@ class ProgressServiceTest {
 
     private UserProfile profile(String userId, String gender, int age,
                                 double weightKg, double heightCm,
-                                String goal, int offset) {
+                                String goal, String activityLevel, int offset) {
         UserProfile p = new UserProfile();
         p.setUserId(userId);
         p.setName("Test");
@@ -43,6 +43,7 @@ class ProgressServiceTest {
         p.setWeightKg(BigDecimal.valueOf(weightKg));
         p.setHeightCm(BigDecimal.valueOf(heightCm));
         p.setGoal(goal);
+        p.setActivityLevel(activityLevel);
         p.setCalorieTargetOffset(offset);
         return p;
     }
@@ -59,73 +60,78 @@ class ProgressServiceTest {
     // ── Tests ─────────────────────────────────────────────────────────────────
 
     @Test
-    void cuttingGoal_female_calculatesCorrectly() {
-        // Female, 28y, 62.5 kg, 168 cm → BMR = (10×62.5)+(6.25×168)−(5×28)−161
-        //   = 625 + 1050 − 140 − 161 = 1374
-        // dailyTarget = 1374 − 500 = 874
-        // todayCalories = 1200  → surplus/deficit = 1200−874 = 326
-        // totalCalories = 3000, days = 3 → accumulated = 3000−(874×3) = 378
-        // weightChange = round(378/7700 × 100) / 100 = 0.05
+    void cuttingGoal_female_sedentary_calculatesTdeeCorrectly() {
+        // Female, 28y, 62.5 kg, 168 cm, sedentary, offset 500
+        // BMR  = (10×62.5) + (6.25×168) − (5×28) − 161 = 625 + 1050 − 140 − 161 = 1374
+        // TDEE = 1374 × 1.2 = 1648.8 → 1649
+        // dailyTarget = 1649 − 500 = 1149
+        // todayCalories = 1000 → surplus/deficit = 1000 − 1149 = −149
+        // accumulated   = 3000 − (1149 × 3) = −447
+        // weightChange  = Math.round(−447/7700 × 100) / 100 = −6/100 = −0.06
 
         when(profileRepository.findByUserId("u1"))
-                .thenReturn(Optional.of(profile("u1", "female", 28, 62.5, 168.0, "cutting", 500)));
-        stubEntries("u1", 1200, 3000, 3);
+                .thenReturn(Optional.of(profile("u1", "female", 28, 62.5, 168.0, "cutting", "sedentary", 500)));
+        stubEntries("u1", 1000, 3000, 3);
 
         ProgressResponse r = service.getProgress("u1");
 
-        assertThat(r.getDailyCalorieTarget()).isEqualTo(874);
-        assertThat(r.getTodayCalories()).isEqualTo(1200);
-        assertThat(r.getTodaySurplusDeficit()).isEqualTo(326);
-        assertThat(r.getAccumulatedSurplusDeficit()).isEqualTo(378);
-        assertThat(r.getEstimatedWeightChangeKg()).isEqualTo(0.05);
+        assertThat(r.getDailyCalorieTarget()).isEqualTo(1149);
+        assertThat(r.getTodayCalories()).isEqualTo(1000);
+        assertThat(r.getTodaySurplusDeficit()).isEqualTo(-149);
+        assertThat(r.getAccumulatedSurplusDeficit()).isEqualTo(-447);
+        assertThat(r.getEstimatedWeightChangeKg()).isEqualTo(-0.06);
         assertThat(r.getGoal()).isEqualTo("cutting");
+        assertThat(r.getCalorieTargetOffset()).isEqualTo(500);
     }
 
     @Test
-    void bulkingGoal_male_calculatesCorrectly() {
-        // Male, 30y, 80 kg, 180 cm → BMR = (10×80)+(6.25×180)−(5×30)+5
-        //   = 800 + 1125 − 150 + 5 = 1780
-        // dailyTarget = 1780 + 300 = 2080
-        // todayCalories = 2500 → surplus = 2500−2080 = 420
-        // totalCalories = 5000, days = 2 → accumulated = 5000−(2080×2) = 840
-        // weightChange = round(840/7700 × 100) / 100 = 0.11
+    void bulkingGoal_male_moderatelyActive_calculatesTdeeCorrectly() {
+        // Male, 30y, 80 kg, 180 cm, moderately_active, offset 300
+        // BMR  = (10×80) + (6.25×180) − (5×30) + 5 = 800 + 1125 − 150 + 5 = 1780
+        // TDEE = 1780 × 1.55 = 2759.0 → 2759
+        // dailyTarget = 2759 + 300 = 3059
+        // todayCalories = 3500 → surplus = 3500 − 3059 = 441
+        // accumulated   = 7000 − (3059 × 2) = 882
+        // weightChange  = Math.round(882/7700 × 100) / 100 = 11/100 = 0.11
 
         when(profileRepository.findByUserId("u2"))
-                .thenReturn(Optional.of(profile("u2", "male", 30, 80.0, 180.0, "bulking", 300)));
-        stubEntries("u2", 2500, 5000, 2);
+                .thenReturn(Optional.of(profile("u2", "male", 30, 80.0, 180.0, "bulking", "moderately_active", 300)));
+        stubEntries("u2", 3500, 7000, 2);
 
         ProgressResponse r = service.getProgress("u2");
 
-        assertThat(r.getDailyCalorieTarget()).isEqualTo(2080);
-        assertThat(r.getTodayCalories()).isEqualTo(2500);
-        assertThat(r.getTodaySurplusDeficit()).isEqualTo(420);
-        assertThat(r.getAccumulatedSurplusDeficit()).isEqualTo(840);
+        assertThat(r.getDailyCalorieTarget()).isEqualTo(3059);
+        assertThat(r.getTodayCalories()).isEqualTo(3500);
+        assertThat(r.getTodaySurplusDeficit()).isEqualTo(441);
+        assertThat(r.getAccumulatedSurplusDeficit()).isEqualTo(882);
         assertThat(r.getEstimatedWeightChangeKg()).isEqualTo(0.11);
         assertThat(r.getGoal()).isEqualTo("bulking");
     }
 
     @Test
-    void maintenanceGoal_appliesNoOffset() {
-        // Male, 30y, 80 kg, 180 cm → BMR = 1780, no offset
-        // dailyTarget = 1780
-        // todayCalories = 1800 → surplus = 20
+    void maintenanceGoal_lightlyActive_appliesNoOffset() {
+        // Male, 30y, 80 kg, 180 cm, lightly_active
+        // BMR  = 1780
+        // TDEE = 1780 × 1.375 = 2447.5 → 2448
+        // dailyTarget = 2448 (maintenance, no offset applied)
+        // todayCalories = 2500 → surplus = 52
 
         when(profileRepository.findByUserId("u3"))
-                .thenReturn(Optional.of(profile("u3", "male", 30, 80.0, 180.0, "maintenance", 500)));
-        stubEntries("u3", 1800, 1800, 1);
+                .thenReturn(Optional.of(profile("u3", "male", 30, 80.0, 180.0, "maintenance", "lightly_active", 500)));
+        stubEntries("u3", 2500, 2500, 1);
 
         ProgressResponse r = service.getProgress("u3");
 
-        assertThat(r.getDailyCalorieTarget()).isEqualTo(1780);
-        assertThat(r.getTodaySurplusDeficit()).isEqualTo(20);
+        assertThat(r.getDailyCalorieTarget()).isEqualTo(2448);
+        assertThat(r.getTodaySurplusDeficit()).isEqualTo(52);
         assertThat(r.getGoal()).isEqualTo("maintenance");
     }
 
     @Test
     void noEntries_returnsZeroCaloriesAndAccumulated() {
         when(profileRepository.findByUserId("u4"))
-                .thenReturn(Optional.of(profile("u4", "female", 25, 60.0, 165.0, "cutting", 300)));
-        // Repository returns null when no rows exist
+                .thenReturn(Optional.of(profile("u4", "female", 25, 60.0, 165.0, "cutting", "sedentary", 300)));
+        // Repository returns null when no rows exist for this user
         when(mealEntryRepository.sumCaloriesForDay(eq("u4"), any(LocalDate.class))).thenReturn(null);
         when(mealEntryRepository.sumAllCaloriesByUserId("u4")).thenReturn(null);
         when(mealEntryRepository.countDistinctDatesWithEntries("u4")).thenReturn(0L);
