@@ -20,6 +20,27 @@ export interface LogEntry {
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
+export interface UserProfile {
+  id: string;
+  name: string;
+  gender: string;
+  age: number;
+  weightKg: number;
+  heightCm: number;
+  goal: string;
+  calorieTargetOffset: number;
+}
+
+export interface CreateProfilePayload {
+  name: string;
+  gender: string;
+  age: number;
+  weightKg: number;
+  heightCm: number;
+  goal: string;
+  calorieTargetOffset?: number;
+}
+
 export interface CreateLogEntryPayload {
   date: string;           // ISO date string YYYY-MM-DD
   mealType: MealType;

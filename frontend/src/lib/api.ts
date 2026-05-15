@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { supabase } from './supabase';
-import type { CreateLogEntryPayload, FoodAnalysisItem, LogEntry } from '../types';
+import type { CreateLogEntryPayload, CreateProfilePayload, FoodAnalysisItem, LogEntry, UserProfile } from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -39,4 +39,17 @@ export async function addLogEntry(payload: CreateLogEntryPayload): Promise<LogEn
 
 export async function removeLogEntry(id: string): Promise<void> {
   await api.delete(`/api/v1/log/${id}`);
+}
+
+// ── Profile ────────────────────────────────────────────────────────
+
+/** Returns the current user's profile. Throws with status 404 if not found (onboarding needed). */
+export async function getProfile(): Promise<UserProfile> {
+  const { data } = await api.get<UserProfile>('/api/v1/profile');
+  return data;
+}
+
+export async function createProfile(payload: CreateProfilePayload): Promise<UserProfile> {
+  const { data } = await api.post<UserProfile>('/api/v1/profile', payload);
+  return data;
 }
