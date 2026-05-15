@@ -8,7 +8,9 @@ public class ProgressResponse {
     private int accumulatedSurplusDeficit;  // positive = surplus, negative = deficit
     private double estimatedWeightChangeKg; // positive = gain, negative = loss
     private String goal;                    // "cutting" | "bulking" | "maintenance"
-    private int calorieTargetOffset;        // current offset — exposed so the UI can display it
+    private int calorieTargetOffset;        // current offset — for the inline editor
+    private int tdee;                       // TDEE before goal offset — for chatbot context
+    private double weightKg;               // user weight — for macro recommendation display
 
     public ProgressResponse(
             int dailyCalorieTarget,
@@ -17,7 +19,9 @@ public class ProgressResponse {
             int accumulatedSurplusDeficit,
             double estimatedWeightChangeKg,
             String goal,
-            int calorieTargetOffset) {
+            int calorieTargetOffset,
+            int tdee,
+            double weightKg) {
         this.dailyCalorieTarget = dailyCalorieTarget;
         this.todayCalories = todayCalories;
         this.todaySurplusDeficit = todaySurplusDeficit;
@@ -25,6 +29,8 @@ public class ProgressResponse {
         this.estimatedWeightChangeKg = estimatedWeightChangeKg;
         this.goal = goal;
         this.calorieTargetOffset = calorieTargetOffset;
+        this.tdee = tdee;
+        this.weightKg = weightKg;
     }
 
     public int getDailyCalorieTarget()         { return dailyCalorieTarget; }
@@ -34,4 +40,6 @@ public class ProgressResponse {
     public double getEstimatedWeightChangeKg() { return estimatedWeightChangeKg; }
     public String getGoal()                    { return goal; }
     public int getCalorieTargetOffset()        { return calorieTargetOffset; }
+    public int getTdee()                       { return tdee; }
+    public double getWeightKg()                { return weightKg; }
 }

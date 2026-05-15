@@ -82,6 +82,9 @@ class ProgressServiceTest {
         assertThat(r.getEstimatedWeightChangeKg()).isEqualTo(-0.06);
         assertThat(r.getGoal()).isEqualTo("cutting");
         assertThat(r.getCalorieTargetOffset()).isEqualTo(500);
+        // TDEE = BMR × 1.2 = 1374 × 1.2 = 1648.8 → 1649
+        assertThat(r.getTdee()).isEqualTo(1649);
+        assertThat(r.getWeightKg()).isEqualTo(62.5);
     }
 
     @Test

@@ -5,6 +5,7 @@ import MacroSummary from './MacroSummary';
 import DailyLog from './DailyLog';
 import ProgressDashboard from './ProgressDashboard';
 import GoalInfoBar from './GoalInfoBar';
+import ChatPanel from './ChatPanel';
 import type { LogEntry, ProgressData } from '../types';
 
 // ── Date helpers (all local-time — avoids UTC midnight off-by-one) ──────────
@@ -63,6 +64,7 @@ export default function Dashboard() {
   const [progressData,  setProgressData]  = useState<ProgressData | null>(null);
   const [initialLoad,   setInitialLoad]   = useState(true);
   const [fetching,      setFetching]      = useState(false);
+  const [chatOpen,      setChatOpen]      = useState(false);
 
   const isToday = selectedDate === getToday();
 
@@ -182,11 +184,21 @@ export default function Dashboard() {
           // Dim the content while a new day's data is loading
           <div className={fetching ? 'opacity-50 pointer-events-none transition-opacity' : 'transition-opacity'}>
             {progressData && <ProgressDashboard data={progressData} />}
-            <MacroSummary entries={entries} />
+            <MacroSummary entries={entries} weightKg={progressData?.weightKg} goal={progressData?.goal} />
             <DailyLog entries={entries} date={selectedDate} onRefresh={handleRefresh} />
           </div>
         )}
       </main>
+      {/* Floating chat button — fixed at bottom-right, above any overlays */}
+      <button
+        onClick={() => setChatOpen(true)}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg text-2xl flex items-center justify-center transition-colors z-40"
+        aria-label="Open AI assistant"
+      >
+        💬
+      </button>
+
+      <ChatPanel isOpen={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
   );
 }

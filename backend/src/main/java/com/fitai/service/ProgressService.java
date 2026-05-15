@@ -27,7 +27,8 @@ public class ProgressService {
         UserProfile profile = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile not found"));
 
-        int dailyTarget = computeDailyTarget(profile);
+        int tdee        = computeTdee(profile);
+        int dailyTarget = applyGoalOffset(tdee, profile.getGoal(), profile.getCalorieTargetOffset());
 
         // Today's intake (null when no entries exist yet)
         BigDecimal rawToday = mealEntryRepository.sumCaloriesForDay(userId, LocalDate.now());
@@ -52,34 +53,35 @@ public class ProgressService {
                 accumulatedRounded,
                 estimatedWeightChange,
                 profile.getGoal(),
-                profile.getCalorieTargetOffset());
+                profile.getCalorieTargetOffset(),
+                tdee,
+                profile.getWeightKg().doubleValue());
     }
 
-    // ── Mifflin-St Jeor TDEE = BMR × activity multiplier + goal offset ────────
+    // ── TDEE calculation (Mifflin-St Jeor × Harris-Benedict multiplier) ───────
 
-    private int computeDailyTarget(UserProfile profile) {
+    /** Package-visible so ChatService can reuse it without duplicating logic. */
+    int computeTdee(UserProfile profile) {
         double weight = profile.getWeightKg().doubleValue();
         double height = profile.getHeightCm().doubleValue();
         int    age    = profile.getAge();
 
-        // BMR — constant differs by gender
         double bmr = (10.0 * weight) + (6.25 * height) - (5.0 * age);
         bmr += "male".equalsIgnoreCase(profile.getGender()) ? 5 : -161;
 
-        // Apply Harris-Benedict activity multiplier to get TDEE
-        double tdee = bmr * activityMultiplier(profile.getActivityLevel());
-        int tdeeRounded = (int) Math.round(tdee);
+        return (int) Math.round(bmr * activityMultiplier(profile.getActivityLevel()));
+    }
 
-        int offset = profile.getCalorieTargetOffset();
-        return switch (profile.getGoal()) {
-            case "cutting"  -> tdeeRounded - offset;
-            case "bulking"  -> tdeeRounded + offset;
-            default         -> tdeeRounded; // maintenance — no offset
+    int applyGoalOffset(int tdee, String goal, int offset) {
+        return switch (goal) {
+            case "cutting"  -> tdee - offset;
+            case "bulking"  -> tdee + offset;
+            default         -> tdee; // maintenance
         };
     }
 
     private double activityMultiplier(String activityLevel) {
-        if (activityLevel == null) return 1.2; // guard for legacy profiles without this field
+        if (activityLevel == null) return 1.2;
         return switch (activityLevel) {
             case "lightly_active"    -> 1.375;
             case "moderately_active" -> 1.55;

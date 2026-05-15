@@ -55,6 +55,22 @@ export interface ProgressData {
   estimatedWeightChangeKg: number;    // positive = gain, negative = loss
   goal: string;                       // "cutting" | "bulking" | "maintenance"
   calorieTargetOffset: number;        // current offset — for the inline editor
+  tdee: number;                       // TDEE before offset — exposed for chatbot context
+  weightKg: number;                   // user weight — for macro recommendation display
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatPayload {
+  message: string;
+  history: ChatMessage[];
+}
+
+export interface ChatResponse {
+  reply: string;
 }
 
 export interface CreateLogEntryPayload {

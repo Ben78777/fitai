@@ -88,6 +88,25 @@ public class GeminiService {
         }
     }
 
+    // ── Chat (free-text, no response_format) ──────────────────────
+
+    /**
+     * Sends a pre-built message array to Groq and returns the plain-text reply.
+     * Used by ChatService which constructs the full system + history array.
+     */
+    public String chat(ArrayNode messages) {
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("model", TEXT_MODEL);
+        body.put("temperature", 0.7); // slightly warmer for natural conversation
+        body.set("messages", messages);
+
+        try {
+            return callGroq(objectMapper.writeValueAsString(body), "chat");
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to send chat request: " + e.getMessage(), e);
+        }
+    }
+
     // ── Image analysis ─────────────────────────────────────────────
 
     public List<FoodAnalysisResult> analyzeImage(String imageBase64, String mimeType) {

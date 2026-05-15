@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { supabase } from './supabase';
-import type { CreateLogEntryPayload, CreateProfilePayload, FoodAnalysisItem, LogEntry, ProgressData, UpdateProfilePayload, UserProfile } from '../types';
+import type { ChatPayload, ChatResponse, CreateLogEntryPayload, CreateProfilePayload, FoodAnalysisItem, LogEntry, ProgressData, UpdateProfilePayload, UserProfile } from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -63,5 +63,12 @@ export async function patchProfile(payload: UpdateProfilePayload): Promise<UserP
 
 export async function getProgress(): Promise<ProgressData> {
   const { data } = await api.get<ProgressData>('/api/v1/progress');
+  return data;
+}
+
+// ── Chat ───────────────────────────────────────────────────────────
+
+export async function sendChatMessage(payload: ChatPayload): Promise<ChatResponse> {
+  const { data } = await api.post<ChatResponse>('/api/v1/chat', payload);
   return data;
 }
