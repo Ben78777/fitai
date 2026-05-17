@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { supabase } from './supabase';
-import type { ChatPayload, ChatResponse, CreateLogEntryPayload, CreateProfilePayload, FoodAnalysisItem, LogEntry, ProgressData, UpdateProfilePayload, UserProfile } from '../types';
+import type { AnalyticsData, ChatPayload, ChatResponse, CreateLogEntryPayload, CreateProfilePayload, FoodAnalysisItem, LogEntry, PredictResponse, ProgressData, UpdateProfilePayload, UserProfile, WeightLogEntry } from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -73,5 +73,44 @@ export async function getProgress(date?: string): Promise<ProgressData> {
 
 export async function sendChatMessage(payload: ChatPayload): Promise<ChatResponse> {
   const { data } = await api.post<ChatResponse>('/api/v1/chat', payload);
+  return data;
+}
+
+// ── Weight Logging ─────────────────────────────────────────────────
+
+export async function logWeight(weightKg: number): Promise<WeightLogEntry> {
+  const { data } = await api.post<WeightLogEntry>('/api/v1/weight', { weightKg });
+  return data;
+}
+
+export async function getWeightLogs(): Promise<WeightLogEntry[]> {
+  const { data } = await api.get<WeightLogEntry[]>('/api/v1/weight');
+  return data;
+}
+
+/** Returns the most recent weight log, or null if none exists. */
+export async function getLatestWeightLog(): Promise<WeightLogEntry | null> {
+  const { data } = await api.get<WeightLogEntry | Record<string, never>>('/api/v1/weight/latest');
+  // Backend returns {} when no log exists — treat empty object as null
+  return 'id' in data ? (data as WeightLogEntry) : null;
+}
+
+/** Returns true when the user hasn't logged weight in 7+ days. */
+export async function checkWeightNudge(): Promise<boolean> {
+  const { data } = await api.get<{ showNudge: boolean }>('/api/v1/weight/nudge');
+  return data.showNudge;
+}
+
+// ── Analytics ──────────────────────────────────────────────────────
+
+/** days=0 → all time; 7/30/90 → last N days */
+export async function getAnalytics(days: number): Promise<AnalyticsData> {
+  const { data } = await api.get<AnalyticsData>('/api/v1/analytics', { params: { days } });
+  return data;
+}
+
+/** Fetch weight prediction; days = projection horizon in days */
+export async function postPredict(days: number): Promise<PredictResponse> {
+  const { data } = await api.post<PredictResponse>('/api/v1/predict', null, { params: { days } });
   return data;
 }

@@ -95,6 +95,53 @@ export interface ChatResponse {
   reply: string;
 }
 
+// ── Weight Logging ─────────────────────────────────────────────────
+
+export interface WeightLogEntry {
+  id: string;
+  weightKg: number;
+  loggedAt: string; // ISO date string YYYY-MM-DD
+}
+
+// ── Analytics ──────────────────────────────────────────────────────
+
+export interface DailyCalorieEntry {
+  date: string;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+}
+
+export interface WeightEntry {
+  date: string;
+  weightKg: number;
+}
+
+export interface AnalyticsData {
+  dailyCalories: DailyCalorieEntry[];
+  weightLogs: WeightEntry[];
+  averageCalories: number;
+  calorieTarget: number;
+}
+
+// ── Weight Prediction ──────────────────────────────────────────────
+
+export interface ProjectionPoint {
+  date: string;
+  actual: number | null;   // null for future dates
+  predicted: number;
+}
+
+export interface PredictResponse {
+  currentWeight: number;
+  predictedWeight: number;
+  estimatedChangeKg: number;   // negative = loss, positive = gain
+  averageDailyDeficit: number; // positive = deficit, negative = surplus
+  projectionDays: number;
+  projectionPoints: ProjectionPoint[];
+}
+
 export interface CreateLogEntryPayload {
   date: string;           // ISO date string YYYY-MM-DD
   mealType: MealType;

@@ -32,4 +32,17 @@ public interface MealEntryRepository extends JpaRepository<MealEntry, UUID> {
     // Count distinct days that have at least one entry — denominator for accumulated calc
     @Query("SELECT COUNT(DISTINCT e.date) FROM MealEntry e WHERE e.userId = :userId")
     long countDistinctDatesWithEntries(@Param("userId") String userId);
+
+    // Per-day totals since a start date — used by AnalyticsService
+    @Query("SELECT e.date, SUM(e.calories), SUM(e.proteinG), SUM(e.carbsG), SUM(e.fatG) " +
+           "FROM MealEntry e WHERE e.userId = :userId AND e.date >= :startDate " +
+           "GROUP BY e.date ORDER BY e.date ASC")
+    List<Object[]> aggregateByDateSince(@Param("userId") String userId,
+                                        @Param("startDate") LocalDate startDate);
+
+    // Per-day totals across all time — used when days=0 (all time)
+    @Query("SELECT e.date, SUM(e.calories), SUM(e.proteinG), SUM(e.carbsG), SUM(e.fatG) " +
+           "FROM MealEntry e WHERE e.userId = :userId " +
+           "GROUP BY e.date ORDER BY e.date ASC")
+    List<Object[]> aggregateAllByDate(@Param("userId") String userId);
 }

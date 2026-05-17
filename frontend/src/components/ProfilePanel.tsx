@@ -20,11 +20,11 @@ const GOAL_LABELS: Record<Goal, string> = {
 };
 
 const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
-  sedentary:         'Sedentary',
-  lightly_active:    'Lightly active',
-  moderately_active: 'Moderately active',
-  very_active:       'Very active',
-  extremely_active:  'Extremely active',
+  sedentary:         'Sedentary (0 workouts/week)',
+  lightly_active:    'Lightly Active (1–2 workouts/week)',
+  moderately_active: 'Moderately Active (3–4 workouts/week)',
+  very_active:       'Very Active (5–6 workouts/week)',
+  extremely_active:  'Extremely Active (7+ workouts/week, intense)',
 };
 
 const GOAL_BADGE: Record<Goal, string> = {

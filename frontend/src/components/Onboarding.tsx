@@ -15,11 +15,11 @@ const GOALS: { value: Goal; label: string; description: string }[] = [
 ];
 
 const ACTIVITY_LEVELS: { value: ActivityLevel; label: string; description: string }[] = [
-  { value: 'sedentary',         label: 'Sedentary',         description: '0 — office job, no exercise'  },
-  { value: 'lightly_active',    label: 'Lightly active',    description: '1–2 times/week'               },
-  { value: 'moderately_active', label: 'Moderately active', description: '3–4 times/week'               },
-  { value: 'very_active',       label: 'Very active',       description: '5–6 times/week'               },
-  { value: 'extremely_active',  label: 'Extremely active',  description: 'Every day, intense'           },
+  { value: 'sedentary',         label: 'Sedentary',         description: '0 workouts/week'            },
+  { value: 'lightly_active',    label: 'Lightly Active',    description: '1–2 workouts/week'          },
+  { value: 'moderately_active', label: 'Moderately Active', description: '3–4 workouts/week'          },
+  { value: 'very_active',       label: 'Very Active',       description: '5–6 workouts/week'          },
+  { value: 'extremely_active',  label: 'Extremely Active',  description: '7+ workouts/week, intense'  },
 ];
 
 export default function Onboarding({ onComplete }: Props) {

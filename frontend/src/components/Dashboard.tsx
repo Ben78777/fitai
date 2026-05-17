@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { getLog, getProgress, getProfile } from '../lib/api';
+import { checkWeightNudge, getLatestWeightLog, getLog, getProgress, getProfile } from '../lib/api';
 import MacroSummary from './MacroSummary';
 import DailyLog from './DailyLog';
 import ProgressDashboard from './ProgressDashboard';
 import GoalInfoBar from './GoalInfoBar';
 import ChatPanel from './ChatPanel';
 import ProfilePanel from './ProfilePanel';
+import WeightLogModal from './WeightLogModal';
+import AnalyticsPage from './AnalyticsPage';
 import type { LogEntry, ProgressData, UserProfile } from '../types';
 
-// ── Date helpers (all local-time — avoids UTC midnight off-by-one) ──────────
+// ── Date helpers (all local-time — avoids UTC midnight off-by-one) ───────────
 
 function toDateString(d: Date): string {
   const y = d.getFullYear();
@@ -38,7 +40,7 @@ function formatDisplay(dateStr: string): string {
   });
 }
 
-// ── Chevron icons ────────────────────────────────────────────────────────────
+// ── Icons ────────────────────────────────────────────────────────────────────
 
 function ChevronLeft() {
   return (
@@ -64,9 +66,14 @@ function UserIcon() {
   );
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+// ── Active tab type ───────────────────────────────────────────────────────────
+
+type Tab = 'log' | 'analytics';
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
+  const [activeTab,     setActiveTab]     = useState<Tab>('log');
   const [selectedDate,  setSelectedDate]  = useState(getToday);
   const [entries,       setEntries]       = useState<LogEntry[]>([]);
   const [progressData,  setProgressData]  = useState<ProgressData | null>(null);
@@ -75,10 +82,18 @@ export default function Dashboard() {
   const [fetching,      setFetching]      = useState(false);
   const [chatOpen,      setChatOpen]      = useState(false);
   const [profileOpen,   setProfileOpen]   = useState(false);
+  const [weightOpen,    setWeightOpen]    = useState(false);
+  const [latestWeight,  setLatestWeight]  = useState<number | undefined>();
+  const [showNudge,     setShowNudge]     = useState(false);
+  const [nudgeDismissed, setNudgeDismissed] = useState(() =>
+    // Remember dismissal within the session so it doesn't reappear on re-render
+    sessionStorage.getItem('nudge_dismissed') === 'true'
+  );
 
   const isToday = selectedDate === getToday();
 
-  // Memoised so useEffect only re-runs when selectedDate actually changes
+  // ── Memoised fetch callbacks ─────────────────────────────────────────────
+
   const fetchLog = useCallback(async () => {
     setFetching(true);
     try {
@@ -105,29 +120,62 @@ export default function Dashboard() {
     } catch { /* silently fail */ }
   }
 
-  // Re-fetch log whenever selectedDate changes (and on mount)
-  useEffect(() => {
-    fetchLog();
-  }, [fetchLog]);
+  // Fetch the latest weight log so the modal can pre-fill the field
+  async function fetchLatestWeight() {
+    try {
+      const log = await getLatestWeightLog();
+      setLatestWeight(log ? Number(log.weightKg) : undefined);
+    } catch { /* silently fail */ }
+  }
 
-  // Re-fetch progress when date changes too
-  useEffect(() => {
-    fetchProgressData();
-  }, [fetchProgressData]);
+  // Check whether to show the weekly weight-logging nudge
+  async function fetchNudge() {
+    if (nudgeDismissed) return;
+    try {
+      const needs = await checkWeightNudge();
+      setShowNudge(needs);
+    } catch { /* silently fail */ }
+  }
 
-  // Profile is date-independent — fetch once on mount
+  // ── Effects ──────────────────────────────────────────────────────────────
+
+  useEffect(() => { fetchLog(); },           [fetchLog]);
+  useEffect(() => { fetchProgressData(); },  [fetchProgressData]);
+
   useEffect(() => {
     fetchUserProfile();
+    fetchLatestWeight();
+    fetchNudge();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Called by DailyLog after any add/remove — keeps all stats in sync
+  // ── Event handlers ────────────────────────────────────────────────────────
+
+  // DailyLog calls this after add/remove — keeps macros and progress in sync
   async function handleRefresh() {
     await Promise.all([fetchLog(), fetchProgressData()]);
   }
 
-  // Called by ProfilePanel after a successful save
+  // ProfilePanel calls this after a successful profile edit
   async function handleProfileSaved() {
     await Promise.all([fetchUserProfile(), fetchProgressData()]);
+  }
+
+  // GoalInfoBar calls this after updating the calorie offset (fix #1)
+  async function handleOffsetSaved() {
+    await Promise.all([fetchProgressData(), fetchUserProfile()]);
+  }
+
+  // WeightLogModal calls this after a successful save
+  function handleWeightSaved(weightKg: number) {
+    setLatestWeight(weightKg);
+    // Dismiss nudge now that they've logged
+    setShowNudge(false);
+  }
+
+  function dismissNudge() {
+    setShowNudge(false);
+    setNudgeDismissed(true);
+    sessionStorage.setItem('nudge_dismissed', 'true');
   }
 
   function goBack()    { setSelectedDate(prev => shiftDate(prev, -1)); }
@@ -137,17 +185,31 @@ export default function Dashboard() {
     await supabase.auth.signOut();
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* ── Header ────────────────────────────────────────────────────────── */}
+    <div className="min-h-screen bg-gray-50 pb-24">
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
-        {/* Title + action buttons */}
+
+        {/* Title row */}
         <div className="max-w-2xl mx-auto px-4 pt-3 pb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xl">🥗</span>
             <h1 className="text-base font-bold text-gray-900 tracking-tight">FitAI</h1>
           </div>
           <div className="flex items-center gap-2">
+            {/* Log Weight button */}
+            <button
+              onClick={() => setWeightOpen(true)}
+              className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-300 px-2.5 py-1.5 rounded-lg transition-colors"
+              aria-label="Log weight"
+              title="Log today's weight"
+            >
+              ⚖️ <span className="hidden sm:inline">Log Weight</span>
+            </button>
+
             <button
               onClick={() => setProfileOpen(true)}
               className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-300 px-3 py-1.5 rounded-lg transition-colors"
@@ -165,71 +227,128 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Goal info bar */}
-        {progressData && (
+        {/* Goal info bar — only on Daily Log tab */}
+        {activeTab === 'log' && progressData && (
           <GoalInfoBar
             progressData={progressData}
-            onOffsetSaved={fetchProgressData}
+            onOffsetSaved={handleOffsetSaved}
           />
         )}
 
-        {/* ── Date navigation ─────────────────────────────────────── */}
-        <div className="max-w-2xl mx-auto px-4 pb-3 flex items-center justify-center gap-2">
-          <button
-            onClick={goBack}
-            className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-            aria-label="Previous day"
-          >
-            <ChevronLeft />
-          </button>
+        {/* Date navigation — only on Daily Log tab */}
+        {activeTab === 'log' && (
+          <div className="max-w-2xl mx-auto px-4 pb-2 flex items-center justify-center gap-2">
+            <button
+              onClick={goBack}
+              className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              aria-label="Previous day"
+            >
+              <ChevronLeft />
+            </button>
 
-          {/* Date chip */}
-          <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border transition-colors ${
-            isToday
-              ? 'bg-green-50 border-green-200 text-green-800'
-              : 'bg-gray-50 border-gray-200 text-gray-700'
-          }`}>
-            {isToday && (
-              <span className="text-xs font-bold uppercase tracking-widest text-green-600">Today</span>
-            )}
-            <span className="text-sm font-medium">{formatDisplay(selectedDate)}</span>
-          </div>
-
-          <button
-            onClick={goForward}
-            disabled={isToday}
-            className={`p-2 rounded-xl transition-colors ${
+            <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border transition-colors ${
               isToday
-                ? 'text-gray-200 cursor-default'
-                : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'
-            }`}
-            aria-label="Next day"
-            aria-disabled={isToday}
-          >
-            <ChevronRight />
-          </button>
+                ? 'bg-green-50 border-green-200 text-green-800'
+                : 'bg-gray-50 border-gray-200 text-gray-700'
+            }`}>
+              {isToday && (
+                <span className="text-xs font-bold uppercase tracking-widest text-green-600">Today</span>
+              )}
+              <span className="text-sm font-medium">{formatDisplay(selectedDate)}</span>
+            </div>
+
+            <button
+              onClick={goForward}
+              disabled={isToday}
+              className={`p-2 rounded-xl transition-colors ${
+                isToday
+                  ? 'text-gray-200 cursor-default'
+                  : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'
+              }`}
+              aria-label="Next day"
+              aria-disabled={isToday}
+            >
+              <ChevronRight />
+            </button>
+          </div>
+        )}
+
+        {/* ── Tab bar ─────────────────────────────────────────────────── */}
+        <div className="max-w-2xl mx-auto px-4 pb-0 flex border-t border-gray-100">
+          {([
+            { id: 'log',       label: '📋 Daily Log'  },
+            { id: 'analytics', label: '📊 Analytics'  },
+          ] as { id: Tab; label: string }[]).map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex-1 py-2.5 text-sm font-medium transition-colors border-b-2 ${
+                activeTab === id
+                  ? 'text-green-600 border-green-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-600'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </header>
 
-      {/* ── Main content ──────────────────────────────────────────────────── */}
+      {/* ── Weight nudge banner ─────────────────────────────────────────── */}
+      {showNudge && !nudgeDismissed && (
+        <div className="max-w-2xl mx-auto px-4 pt-3">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3">
+            <span className="text-lg">⚖️</span>
+            <p className="text-sm text-amber-800 flex-1">
+              You haven't logged your weight in over a week. Log it now to keep your prediction accurate!
+            </p>
+            <div className="flex gap-2 flex-shrink-0">
+              <button
+                onClick={() => setWeightOpen(true)}
+                className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+              >
+                Log now
+              </button>
+              <button
+                onClick={dismissNudge}
+                className="text-xs text-amber-600 hover:text-amber-800 px-2 py-1 rounded-lg transition-colors"
+                aria-label="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Main content ────────────────────────────────────────────────── */}
       <main className="max-w-2xl mx-auto px-4 py-5">
-        {initialLoad ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-6 h-6 border-[3px] border-green-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : (
-          <div className={fetching ? 'opacity-50 pointer-events-none transition-opacity' : 'transition-opacity'}>
-            {progressData && (
-              <ProgressDashboard data={progressData} isToday={isToday} selectedDate={selectedDate} />
-            )}
-            <MacroSummary
-              entries={entries}
-              weightKg={progressData?.weightKg}
-              goal={progressData?.goal}
-              dailyCalorieTarget={progressData?.dailyCalorieTarget}
-            />
-            <DailyLog entries={entries} date={selectedDate} onRefresh={handleRefresh} />
-          </div>
+
+        {/* Daily Log tab */}
+        {activeTab === 'log' && (
+          initialLoad ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="w-6 h-6 border-[3px] border-green-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <div className={fetching ? 'opacity-50 pointer-events-none transition-opacity' : 'transition-opacity'}>
+              {progressData && (
+                <ProgressDashboard data={progressData} isToday={isToday} selectedDate={selectedDate} />
+              )}
+              <MacroSummary
+                entries={entries}
+                weightKg={progressData?.weightKg}
+                goal={progressData?.goal}
+                dailyCalorieTarget={progressData?.dailyCalorieTarget}
+              />
+              <DailyLog entries={entries} date={selectedDate} onRefresh={handleRefresh} />
+            </div>
+          )
+        )}
+
+        {/* Analytics tab */}
+        {activeTab === 'analytics' && (
+          <AnalyticsPage />
         )}
       </main>
 
@@ -242,6 +361,7 @@ export default function Dashboard() {
         💬
       </button>
 
+      {/* ── Modals & panels ─────────────────────────────────────────────── */}
       <ChatPanel isOpen={chatOpen} onClose={() => setChatOpen(false)} />
 
       {userProfile && (
@@ -253,6 +373,13 @@ export default function Dashboard() {
           onSaved={handleProfileSaved}
         />
       )}
+
+      <WeightLogModal
+        isOpen={weightOpen}
+        onClose={() => setWeightOpen(false)}
+        lastWeight={latestWeight ?? userProfile?.weightKg}
+        onSaved={handleWeightSaved}
+      />
     </div>
   );
 }
