@@ -40,8 +40,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Allow CORS preflight without a token
                 .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
-                // Liveness probe — no auth needed
-                .requestMatchers("/health").permitAll()
+                // Liveness probe — no auth needed (both paths)
+                .requestMatchers("/health", "/api/v1/health").permitAll()
                 .requestMatchers("/api/v1/**").authenticated()
                 .anyRequest().permitAll())
             .addFilterBefore(supabaseJwtFilter, UsernamePasswordAuthenticationFilter.class);
