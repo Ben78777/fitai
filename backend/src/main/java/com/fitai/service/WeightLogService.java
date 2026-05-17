@@ -51,7 +51,8 @@ public class WeightLogService {
      */
     public boolean needsWeightNudge(String userId) {
         LocalDate threshold = LocalDate.now().minusDays(7);
-        return !weightLogRepository.existsByUserIdAndLoggedAtGreaterThanEqual(userId, threshold);
+        Long count = weightLogRepository.countByUserIdSince(userId, threshold);
+        return count == null || count == 0;
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────

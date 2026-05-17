@@ -24,8 +24,11 @@ public interface WeightLogRepository extends JpaRepository<WeightLog, UUID> {
     // Most recent log entry — used to pre-fill the weight modal
     Optional<WeightLog> findTopByUserIdOrderByLoggedAtDesc(String userId);
 
-    // Check if the user has logged weight recently (for the nudge banner)
-    @Query("SELECT COUNT(w) > 0 FROM WeightLog w WHERE w.userId = :userId AND w.loggedAt >= :since")
-    boolean existsByUserIdAndLoggedAtGreaterThanEqual(@Param("userId") String userId,
-                                                      @Param("since") LocalDate since);
+    // Count how many weight logs exist since a given date — standard JPQL,
+    // used by WeightLogService to implement the "log every 7 days" nudge check.
+    // (SELECT COUNT(...) > 0 is non-standard JPQL and fails Hibernate's startup
+    //  query validation; the > 0 check is done in Java instead.)
+    @Query("SELECT COUNT(w) FROM WeightLog w WHERE w.userId = :userId AND w.loggedAt >= :since")
+    Long countByUserIdSince(@Param("userId") String userId,
+                            @Param("since") LocalDate since);
 }

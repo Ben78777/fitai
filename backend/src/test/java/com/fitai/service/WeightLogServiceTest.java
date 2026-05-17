@@ -104,16 +104,16 @@ class WeightLogServiceTest {
 
     @Test
     void needsWeightNudge_returnsTrueWhenNoRecentLog() {
-        when(weightLogRepository.existsByUserIdAndLoggedAtGreaterThanEqual(eq("user1"), any(LocalDate.class)))
-                .thenReturn(false);
+        when(weightLogRepository.countByUserIdSince(eq("user1"), any(LocalDate.class)))
+                .thenReturn(0L);
 
         assertThat(service.needsWeightNudge("user1")).isTrue();
     }
 
     @Test
     void needsWeightNudge_returnsFalseWhenRecentLogExists() {
-        when(weightLogRepository.existsByUserIdAndLoggedAtGreaterThanEqual(eq("user1"), any(LocalDate.class)))
-                .thenReturn(true);
+        when(weightLogRepository.countByUserIdSince(eq("user1"), any(LocalDate.class)))
+                .thenReturn(1L);
 
         assertThat(service.needsWeightNudge("user1")).isFalse();
     }

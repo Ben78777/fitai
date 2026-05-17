@@ -8,14 +8,17 @@ import java.util.Map;
 
 /**
  * Liveness probe — no auth required.
- * GET /health          →  {"status":"ok"}
- * GET /api/v1/health   →  {"status":"ok"}  (for uptime monitoring tools)
+ * GET /health          →  {"status":"ok","build":"..."}
+ * GET /api/v1/health   →  same  (for uptime monitoring tools)
  */
 @RestController
 public class HealthController {
 
+    // Bumped on each deploy to confirm the new code is running.
+    private static final String BUILD = "2026-05-18-v3";
+
     @GetMapping({"/health", "/api/v1/health"})
     public ResponseEntity<Map<String, String>> health() {
-        return ResponseEntity.ok(Map.of("status", "ok"));
+        return ResponseEntity.ok(Map.of("status", "ok", "build", BUILD));
     }
 }
