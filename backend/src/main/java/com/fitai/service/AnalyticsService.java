@@ -7,6 +7,8 @@ import com.fitai.model.WeightLog;
 import com.fitai.repository.MealEntryRepository;
 import com.fitai.repository.UserProfileRepository;
 import com.fitai.repository.WeightLogRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -21,6 +23,8 @@ import java.util.Map;
 
 @Service
 public class AnalyticsService {
+
+    private static final Logger log = LoggerFactory.getLogger(AnalyticsService.class);
 
     private final MealEntryRepository mealEntryRepository;
     private final WeightLogRepository weightLogRepository;
@@ -68,15 +72,23 @@ public class AnalyticsService {
                 ? BigDecimal.ZERO
                 : totalCalories.divide(BigDecimal.valueOf(dailyEntries.size()), 0, RoundingMode.HALF_UP);
 
-        // 2. Fetch weight logs for the same window
-        List<WeightLog> weightLogs = days > 0
-                ? weightLogRepository.findByUserIdAndLoggedAtGreaterThanEqualOrderByLoggedAtAsc(
-                        userId, LocalDate.now().minusDays(days - 1L))
-                : weightLogRepository.findByUserIdOrderByLoggedAtAsc(userId);
-
-        List<AnalyticsResponse.WeightEntry> weightEntries = weightLogs.stream()
-                .map(w -> new AnalyticsResponse.WeightEntry(w.getLoggedAt(), w.getWeightKg()))
-                .toList();
+        // 2. Fetch weight logs — wrapped defensively: if the weight_logs table hasn't been
+        //    created yet (migration pending), return empty list so calorie/macro charts
+        //    still work rather than failing the whole response.
+        List<AnalyticsResponse.WeightEntry> weightEntries = new ArrayList<>();
+        try {
+            List<WeightLog> weightLogs = days > 0
+                    ? weightLogRepository.findByUserIdAndLoggedAtGreaterThanEqualOrderByLoggedAtAsc(
+                            userId, LocalDate.now().minusDays(days - 1L))
+                    : weightLogRepository.findByUserIdOrderByLoggedAtAsc(userId);
+            weightEntries = weightLogs.stream()
+                    .map(w -> new AnalyticsResponse.WeightEntry(w.getLoggedAt(), w.getWeightKg()))
+                    .toList();
+        } catch (Exception e) {
+            // Most likely cause: weight_logs table not yet created in the database.
+            // Log a warning so it's visible in Render logs, but don't crash the response.
+            log.warn("Could not fetch weight logs (run the weight_logs migration if missing): {}", e.getMessage());
+        }
 
         // 3. Calorie target (TDEE adjusted for goal)
         int tdee        = progressService.computeTdee(profile);
@@ -122,11 +134,17 @@ public class AnalyticsService {
         BigDecimal currentWeight = profile.getWeightKg();
         double current = currentWeight.doubleValue();
 
-        // Build a map of actual weight log dates for easy lookup
-        List<WeightLog> allLogs = weightLogRepository.findByUserIdOrderByLoggedAtAsc(userId);
+        // Build a map of actual weight log dates for easy lookup.
+        // Wrapped defensively: if the weight_logs table doesn't exist yet, fall back
+        // to an empty map so the projection still renders without actual data points.
         Map<LocalDate, BigDecimal> actualByDate = new HashMap<>();
-        for (WeightLog log : allLogs) {
-            actualByDate.put(log.getLoggedAt(), log.getWeightKg());
+        try {
+            List<WeightLog> allLogs = weightLogRepository.findByUserIdOrderByLoggedAtAsc(userId);
+            for (WeightLog wl : allLogs) {
+                actualByDate.put(wl.getLoggedAt(), wl.getWeightKg());
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch weight logs for prediction (run the weight_logs migration if missing): {}", e.getMessage());
         }
 
         // Projection starts from today, goes forward projectionDays
