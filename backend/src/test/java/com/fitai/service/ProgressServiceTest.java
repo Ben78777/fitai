@@ -65,9 +65,9 @@ class ProgressServiceTest {
         // BMR  = (10×62.5) + (6.25×168) − (5×28) − 161 = 625 + 1050 − 140 − 161 = 1374
         // TDEE = 1374 × 1.2 = 1648.8 → 1649
         // dailyTarget = 1649 − 500 = 1149
-        // todayCalories = 1000 → surplus/deficit = 1000 − 1149 = −149
-        // accumulated   = 3000 − (1149 × 3) = −447
-        // weightChange  = Math.round(−447/7700 × 100) / 100 = −6/100 = −0.06
+        // todayCalories = 1000 → surplus/deficit vs TDEE = 1000 − 1649 = −649
+        // accumulated   = 3000 − (1649 × 3) = 3000 − 4947 = −1947
+        // weightChange  = Math.round(−1947/7700 × 100) / 100 = Math.round(−25.28) / 100 = −0.25
 
         when(profileRepository.findByUserId("u1"))
                 .thenReturn(Optional.of(profile("u1", "female", 28, 62.5, 168.0, "cutting", "sedentary", 500)));
@@ -77,9 +77,9 @@ class ProgressServiceTest {
 
         assertThat(r.getDailyCalorieTarget()).isEqualTo(1149);
         assertThat(r.getTodayCalories()).isEqualTo(1000);
-        assertThat(r.getTodaySurplusDeficit()).isEqualTo(-149);
-        assertThat(r.getAccumulatedSurplusDeficit()).isEqualTo(-447);
-        assertThat(r.getEstimatedWeightChangeKg()).isEqualTo(-0.06);
+        assertThat(r.getTodaySurplusDeficit()).isEqualTo(-649);   // vs TDEE, not dailyTarget
+        assertThat(r.getAccumulatedSurplusDeficit()).isEqualTo(-1947);
+        assertThat(r.getEstimatedWeightChangeKg()).isEqualTo(-0.25);
         assertThat(r.getGoal()).isEqualTo("cutting");
         assertThat(r.getCalorieTargetOffset()).isEqualTo(500);
         // TDEE = BMR × 1.2 = 1374 × 1.2 = 1648.8 → 1649
@@ -93,9 +93,9 @@ class ProgressServiceTest {
         // BMR  = (10×80) + (6.25×180) − (5×30) + 5 = 800 + 1125 − 150 + 5 = 1780
         // TDEE = 1780 × 1.55 = 2759.0 → 2759
         // dailyTarget = 2759 + 300 = 3059
-        // todayCalories = 3500 → surplus = 3500 − 3059 = 441
-        // accumulated   = 7000 − (3059 × 2) = 882
-        // weightChange  = Math.round(882/7700 × 100) / 100 = 11/100 = 0.11
+        // todayCalories = 3500 → surplus vs TDEE = 3500 − 2759 = 741
+        // accumulated   = 7000 − (2759 × 2) = 7000 − 5518 = 1482
+        // weightChange  = Math.round(1482/7700 × 100) / 100 = Math.round(19.25) / 100 = 0.19
 
         when(profileRepository.findByUserId("u2"))
                 .thenReturn(Optional.of(profile("u2", "male", 30, 80.0, 180.0, "bulking", "moderately_active", 300)));
@@ -105,9 +105,9 @@ class ProgressServiceTest {
 
         assertThat(r.getDailyCalorieTarget()).isEqualTo(3059);
         assertThat(r.getTodayCalories()).isEqualTo(3500);
-        assertThat(r.getTodaySurplusDeficit()).isEqualTo(441);
-        assertThat(r.getAccumulatedSurplusDeficit()).isEqualTo(882);
-        assertThat(r.getEstimatedWeightChangeKg()).isEqualTo(0.11);
+        assertThat(r.getTodaySurplusDeficit()).isEqualTo(741);    // vs TDEE, not dailyTarget
+        assertThat(r.getAccumulatedSurplusDeficit()).isEqualTo(1482);
+        assertThat(r.getEstimatedWeightChangeKg()).isEqualTo(0.19);
         assertThat(r.getGoal()).isEqualTo("bulking");
     }
 

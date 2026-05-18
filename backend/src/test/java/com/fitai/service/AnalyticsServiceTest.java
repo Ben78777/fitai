@@ -136,7 +136,7 @@ class AnalyticsServiceTest {
     void predict_noDaysLogged_returnsZeroChange() {
         when(userProfileRepository.findByUserId("user1")).thenReturn(Optional.of(profile));
         when(progressService.computeTdee(profile)).thenReturn(2200);
-        when(progressService.applyGoalOffset(2200, "cutting", 500)).thenReturn(1700);
+        // No applyGoalOffset stub — predict() uses TDEE directly, not dailyTarget
         when(mealEntryRepository.sumAllCaloriesByUserId("user1")).thenReturn(null);
         when(mealEntryRepository.countDistinctDatesWithEntries("user1")).thenReturn(0L);
         when(weightLogRepository.findByUserIdOrderByLoggedAtAsc("user1")).thenReturn(List.of());
@@ -152,9 +152,9 @@ class AnalyticsServiceTest {
     void predict_consistentDeficit_estimatesWeightLoss() {
         when(userProfileRepository.findByUserId("user1")).thenReturn(Optional.of(profile));
         when(progressService.computeTdee(profile)).thenReturn(2200);
-        when(progressService.applyGoalOffset(2200, "cutting", 500)).thenReturn(1700);
+        // No applyGoalOffset stub — predict() uses TDEE directly
 
-        // Ate 1200 kcal/day for 10 days → deficit = 1700−1200 = 500 kcal/day
+        // Ate 1200 kcal/day for 10 days → deficit vs TDEE = 2200−1200 = 1000 kcal/day
         when(mealEntryRepository.sumAllCaloriesByUserId("user1")).thenReturn(BigDecimal.valueOf(12000));
         when(mealEntryRepository.countDistinctDatesWithEntries("user1")).thenReturn(10L);
         when(weightLogRepository.findByUserIdOrderByLoggedAtAsc("user1")).thenReturn(List.of());
@@ -171,7 +171,7 @@ class AnalyticsServiceTest {
     void predict_projectionPointsHaveActualValueForTodayOnly() {
         when(userProfileRepository.findByUserId("user1")).thenReturn(Optional.of(profile));
         when(progressService.computeTdee(profile)).thenReturn(2200);
-        when(progressService.applyGoalOffset(2200, "cutting", 500)).thenReturn(1700);
+        // No applyGoalOffset stub — predict() uses TDEE directly
         when(mealEntryRepository.sumAllCaloriesByUserId("user1")).thenReturn(BigDecimal.valueOf(1700));
         when(mealEntryRepository.countDistinctDatesWithEntries("user1")).thenReturn(1L);
 

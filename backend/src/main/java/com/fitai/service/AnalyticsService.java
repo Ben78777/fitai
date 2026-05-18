@@ -115,16 +115,17 @@ public class AnalyticsService {
     public PredictResponse predict(String userId, int projectionDays) {
         UserProfile profile = requireProfile(userId);
 
-        int tdee        = progressService.computeTdee(profile);
-        int dailyTarget = progressService.applyGoalOffset(tdee, profile.getGoal(), profile.getCalorieTargetOffset());
+        int tdee = progressService.computeTdee(profile);
+        // Prediction uses TDEE (what you burn) as the base — same reason as ProgressService.
+        // The calorie target is your plan; TDEE is the thermodynamic reality.
 
         BigDecimal rawTotal = mealEntryRepository.sumAllCaloriesByUserId(userId);
         double totalCaloriesEaten = rawTotal != null ? rawTotal.doubleValue() : 0.0;
         long daysLogged = mealEntryRepository.countDistinctDatesWithEntries(userId);
 
-        // Average daily deficit (positive = eating less than target = losing weight)
+        // Average daily deficit (positive = eating less than TDEE = losing weight)
         double avgDailyDeficit = daysLogged > 0
-                ? (((double) dailyTarget * daysLogged) - totalCaloriesEaten) / daysLogged
+                ? (((double) tdee * daysLogged) - totalCaloriesEaten) / daysLogged
                 : 0.0;
 
         // A positive deficit (eating less than target) means weight goes DOWN,

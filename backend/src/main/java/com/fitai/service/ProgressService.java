@@ -38,14 +38,15 @@ public class ProgressService {
         // Calories for the requested date (null when no entries exist yet for that day)
         BigDecimal rawToday = mealEntryRepository.sumCaloriesForDay(userId, date);
         int todayCalories = rawToday != null ? (int) Math.round(rawToday.doubleValue()) : 0;
-        int todaySurplusDeficit = todayCalories - dailyTarget;
+        // Surplus/deficit is vs. TDEE (thermodynamic reality), not the calorie target.
+        // The target is what you *aim* for; TDEE is what your body actually burns.
+        int todaySurplusDeficit = todayCalories - tdee;
 
-        // All-time accumulated surplus/deficit:
-        //   accumulated = totalCaloriesEver - (dailyTarget × numberOfDaysWithEntries)
+        // All-time accumulated surplus/deficit vs. TDEE
         BigDecimal rawTotal = mealEntryRepository.sumAllCaloriesByUserId(userId);
         double totalCalories = rawTotal != null ? rawTotal.doubleValue() : 0.0;
         long daysWithEntries = mealEntryRepository.countDistinctDatesWithEntries(userId);
-        double accumulated = totalCalories - ((double) dailyTarget * daysWithEntries);
+        double accumulated = totalCalories - ((double) tdee * daysWithEntries);
         int accumulatedRounded = (int) Math.round(accumulated);
 
         // 1 kg of body fat ≈ 7700 kcal; round to 2 decimal places
