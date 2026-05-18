@@ -4,8 +4,7 @@ import com.fitai.dto.response.AnalyticsResponse;
 import com.fitai.dto.response.PredictResponse;
 import com.fitai.service.AnalyticsService;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -24,10 +23,12 @@ public class AnalyticsController {
      */
     @GetMapping("/analytics")
     public ResponseEntity<AnalyticsResponse> getAnalytics(
-            @AuthenticationPrincipal UserDetails user,
+            Authentication auth,
             @RequestParam(defaultValue = "30") int days) {
 
-        return ResponseEntity.ok(analyticsService.getAnalytics(user.getUsername(), days));
+        // Principal is the raw userId String set by SupabaseJwtFilter — not a UserDetails object
+        String userId = (String) auth.getPrincipal();
+        return ResponseEntity.ok(analyticsService.getAnalytics(userId, days));
     }
 
     /**
@@ -37,9 +38,10 @@ public class AnalyticsController {
      */
     @PostMapping("/predict")
     public ResponseEntity<PredictResponse> predict(
-            @AuthenticationPrincipal UserDetails user,
+            Authentication auth,
             @RequestParam(defaultValue = "30") int days) {
 
-        return ResponseEntity.ok(analyticsService.predict(user.getUsername(), days));
+        String userId = (String) auth.getPrincipal();
+        return ResponseEntity.ok(analyticsService.predict(userId, days));
     }
 }

@@ -6,8 +6,7 @@ import com.fitai.service.WeightLogService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,37 +25,34 @@ public class WeightLogController {
     /** POST /api/v1/weight — log today's weight */
     @PostMapping
     public ResponseEntity<WeightLogResponse> logWeight(
-            @AuthenticationPrincipal UserDetails user,
+            Authentication auth,
             @Valid @RequestBody CreateWeightLogRequest request) {
 
-        WeightLogResponse saved = weightLogService.logWeight(user.getUsername(), request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+        // Principal is the raw userId String set by SupabaseJwtFilter — not a UserDetails object
+        String userId = (String) auth.getPrincipal();
+        return ResponseEntity.status(HttpStatus.CREATED).body(weightLogService.logWeight(userId, request));
     }
 
     /** GET /api/v1/weight — all weight entries, oldest-first */
     @GetMapping
-    public ResponseEntity<List<WeightLogResponse>> getAllLogs(
-            @AuthenticationPrincipal UserDetails user) {
-
-        return ResponseEntity.ok(weightLogService.getAllLogs(user.getUsername()));
+    public ResponseEntity<List<WeightLogResponse>> getAllLogs(Authentication auth) {
+        String userId = (String) auth.getPrincipal();
+        return ResponseEntity.ok(weightLogService.getAllLogs(userId));
     }
 
     /** GET /api/v1/weight/latest — most recent entry (pre-fills the modal) */
     @GetMapping("/latest")
-    public ResponseEntity<?> getLatest(
-            @AuthenticationPrincipal UserDetails user) {
-
-        return weightLogService.getLatestLog(user.getUsername())
+    public ResponseEntity<?> getLatest(Authentication auth) {
+        String userId = (String) auth.getPrincipal();
+        return weightLogService.getLatestLog(userId)
                 .<ResponseEntity<?>>map(ResponseEntity::ok)
                 .orElse(ResponseEntity.ok(Map.of())); // empty object when no log exists
     }
 
     /** GET /api/v1/weight/nudge — true if user hasn't logged in 7+ days */
     @GetMapping("/nudge")
-    public ResponseEntity<Map<String, Boolean>> nudge(
-            @AuthenticationPrincipal UserDetails user) {
-
-        boolean needs = weightLogService.needsWeightNudge(user.getUsername());
-        return ResponseEntity.ok(Map.of("showNudge", needs));
+    public ResponseEntity<Map<String, Boolean>> nudge(Authentication auth) {
+        String userId = (String) auth.getPrincipal();
+        return ResponseEntity.ok(Map.of("showNudge", weightLogService.needsWeightNudge(userId)));
     }
 }
