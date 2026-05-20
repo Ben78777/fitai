@@ -247,7 +247,13 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function AnalyticsPage() {
+interface Props {
+  /** Incremented by Dashboard whenever the user saves a profile change.
+   *  Adding it to fetchData's dependency array causes an automatic re-fetch. */
+  profileVersion: number;
+}
+
+export default function AnalyticsPage({ profileVersion }: Props) {
   const [filter,     setFilter]     = useState<DayFilter>(30);
   const [analytics,  setAnalytics]  = useState<AnalyticsData | null>(null);
   const [prediction, setPrediction] = useState<PredictResponse | null>(null);
@@ -269,7 +275,7 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, profileVersion]); // profileVersion triggers re-fetch when profile changes
 
   useEffect(() => {
     fetchData();
