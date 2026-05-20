@@ -103,40 +103,37 @@ public class AnalyticsService {
     }
 
     /**
-     * Builds a weight prediction based on logged calorie deficit/surplus history.
+     * Builds a weight prediction from the user's calorie target offset (their plan),
+     * not from historical eating averages. This gives instant, deterministic feedback
+     * when the user changes their goal or offset — no historical data needed.
      *
      * Algorithm:
-     *  1. averageDailyDeficit = (targetCalories × daysLogged − totalCaloriesEaten) / daysLogged
-     *     Positive value = deficit (losing weight); negative = surplus (gaining).
-     *  2. changePerDay = averageDailyDeficit / 7700  (1 kg fat ≈ 7700 kcal)
+     *  1. dailyDeficit = calorieTargetOffset  (e.g. 500 kcal below TDEE for cutting)
+     *  2. changePerDay = -(offset / 7700)  for cutting,  +(offset / 7700) for bulking
      *  3. Project forward for projectionDays starting from today.
      *  4. Merge actual weight logs with projected trend.
      */
     public PredictResponse predict(String userId, int projectionDays) {
         UserProfile profile = requireProfile(userId);
 
-        int tdee = progressService.computeTdee(profile);
-        // Prediction uses TDEE (what you burn) as the base — same reason as ProgressService.
-        // The calorie target is your plan; TDEE is the thermodynamic reality.
+        // calorieTargetOffset is the kcal/day the user plans to eat above/below their TDEE
+        int offset = profile.getCalorieTargetOffset();
 
-        BigDecimal rawTotal = mealEntryRepository.sumAllCaloriesByUserId(userId);
-        double totalCaloriesEaten = rawTotal != null ? rawTotal.doubleValue() : 0.0;
-        long daysLogged = mealEntryRepository.countDistinctDatesWithEntries(userId);
-
-        // Maintenance goal means eating at TDEE by intent — no weight change predicted
-        // regardless of historical calorie logs (those may reflect a different past goal).
+        // Maintenance: no change regardless of offset value.
+        // Cutting: eat offset kcal below TDEE → lose weight.
+        // Bulking: eat offset kcal above TDEE → gain weight.
         final double avgDailyDeficit;
         final double changePerDay;
         if ("maintenance".equals(profile.getGoal())) {
             avgDailyDeficit = 0.0;
             changePerDay    = 0.0;
+        } else if ("cutting".equals(profile.getGoal())) {
+            avgDailyDeficit = offset;               // positive = deficit (eating less)
+            changePerDay    = -(offset / 7700.0);   // weight goes down
         } else {
-            // Average daily deficit (positive = eating less than TDEE = losing weight)
-            avgDailyDeficit = daysLogged > 0
-                    ? (((double) tdee * daysLogged) - totalCaloriesEaten) / daysLogged
-                    : 0.0;
-            // Positive deficit → weight goes DOWN → negate for changePerDay
-            changePerDay = -avgDailyDeficit / 7700.0;
+            // bulking: eating offset kcal above TDEE
+            avgDailyDeficit = -offset;              // negative = surplus
+            changePerDay    = +(offset / 7700.0);   // weight goes up
         }
 
         BigDecimal currentWeight = profile.getWeightKg();
@@ -179,6 +176,7 @@ public class AnalyticsService {
         response.setProjectionDays(projectionDays);
         response.setProjectionPoints(points);
         response.setGoal(profile.getGoal());
+        response.setDailyDeficitUsed(offset); // the raw offset used so the UI can display it
         return response;
     }
 

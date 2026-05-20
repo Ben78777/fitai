@@ -15,7 +15,7 @@ import java.util.Map;
 public class HealthController {
 
     // Bumped on each deploy to confirm the new code is running.
-    private static final String BUILD = "2026-05-18-v6";
+    private static final String BUILD = "2026-05-20-v7";
 
     @GetMapping({"/health", "/api/v1/health"})
     public ResponseEntity<Map<String, String>> health() {

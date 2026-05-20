@@ -141,6 +141,7 @@ export interface PredictResponse {
   projectionDays: number;
   projectionPoints: ProjectionPoint[];
   goal: string;                // "cutting" | "bulking" | "maintenance"
+  dailyDeficitUsed: number;    // the calorieTargetOffset used for this projection (kcal)
 }
 
 export interface CreateLogEntryPayload {

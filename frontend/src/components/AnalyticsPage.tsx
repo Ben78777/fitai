@@ -5,7 +5,7 @@ import {
   ComposedChart,
 } from 'recharts';
 import { getAnalytics, postPredict } from '../lib/api';
-import type { AnalyticsData, PredictResponse } from '../types';
+import type { AnalyticsData, PredictResponse, UserProfile } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -172,27 +172,28 @@ function PredictionChart({ prediction }: { prediction: PredictResponse }) {
   const minW = Math.floor(rawMin - (rawMin === rawMax ? 1 : 0.5));
   const maxW = Math.ceil( rawMax + (rawMin === rawMax ? 1 : 0.5));
 
-  // Goal-aware summary text
+  // Goal-aware summary text, referencing the actual offset used
   const changeKg  = Number(prediction.estimatedChangeKg);
   const changeAbs = Math.abs(changeKg).toFixed(2);
+  const offset    = prediction.dailyDeficitUsed;
   let changeSummary: React.ReactNode;
   if (prediction.goal === 'maintenance') {
     changeSummary = (
       <span className="font-semibold text-blue-600">
-        Eating at maintenance — no weight change predicted
+        At maintenance — no weight change predicted
       </span>
     );
   } else if (prediction.goal === 'cutting') {
     changeSummary = (
       <span className="font-semibold text-green-600">
-        Estimated loss: {changeAbs} kg
+        Based on your {offset} kcal daily deficit: estimated loss of {changeAbs} kg in {prediction.projectionDays} days
       </span>
     );
   } else {
     // bulking
     changeSummary = (
       <span className="font-semibold text-orange-500">
-        Estimated gain: {changeAbs} kg
+        Based on your {offset} kcal daily surplus: estimated gain of {changeAbs} kg in {prediction.projectionDays} days
       </span>
     );
   }
@@ -271,12 +272,12 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface Props {
-  /** Incremented by Dashboard whenever the user saves a profile change.
-   *  Adding it to fetchData's dependency array causes an automatic re-fetch. */
-  profileVersion: number;
+  /** Passed from Dashboard — specific primitive fields are used as fetchData deps
+   *  so any profile change (goal, offset, weight, activity) triggers a re-fetch. */
+  userProfile: UserProfile | null;
 }
 
-export default function AnalyticsPage({ profileVersion }: Props) {
+export default function AnalyticsPage({ userProfile }: Props) {
   const [filter,     setFilter]     = useState<DayFilter>(30);
   const [analytics,  setAnalytics]  = useState<AnalyticsData | null>(null);
   const [prediction, setPrediction] = useState<PredictResponse | null>(null);
@@ -298,7 +299,9 @@ export default function AnalyticsPage({ profileVersion }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [filter, profileVersion]); // profileVersion triggers re-fetch when profile changes
+  // Individual primitive fields as deps — any profile change (goal, offset, weight, activity)
+  // causes React to see a new value and re-run fetchData immediately.
+  }, [filter, userProfile?.goal, userProfile?.calorieTargetOffset, userProfile?.activityLevel, userProfile?.weightKg]);
 
   useEffect(() => {
     fetchData();
@@ -323,7 +326,8 @@ export default function AnalyticsPage({ profileVersion }: Props) {
       ) : error ? (
         <div className="text-sm text-red-500 text-center py-10">{error}</div>
       ) : analytics ? (
-        <div className="space-y-4">
+        // key on the outer div forces recharts to fully remount when analytics data changes
+        <div key={`${userProfile?.goal}-${userProfile?.calorieTargetOffset}`} className="space-y-4">
           {/* Avg callout */}
           {analytics.dailyCalories.length > 0 && (
             <div className="bg-green-50 border border-green-100 rounded-2xl px-4 py-3 flex items-center gap-3">

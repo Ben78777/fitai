@@ -13,6 +13,7 @@ public class PredictResponse {
     private int projectionDays;
     private List<ProjectionPoint> projectionPoints;
     private String goal;                      // "cutting" | "bulking" | "maintenance"
+    private int dailyDeficitUsed;             // calorieTargetOffset used for this prediction
 
     public PredictResponse() {}
 
@@ -36,6 +37,9 @@ public class PredictResponse {
 
     public String getGoal() { return goal; }
     public void setGoal(String goal) { this.goal = goal; }
+
+    public int getDailyDeficitUsed() { return dailyDeficitUsed; }
+    public void setDailyDeficitUsed(int dailyDeficitUsed) { this.dailyDeficitUsed = dailyDeficitUsed; }
 
     // ── Inner: one point on the prediction chart ──────────────────────────────
     public static class ProjectionPoint {

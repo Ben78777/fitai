@@ -80,9 +80,6 @@ export default function Dashboard() {
   const [userProfile,   setUserProfile]   = useState<UserProfile | null>(null);
   const [initialLoad,   setInitialLoad]   = useState(true);
   const [fetching,      setFetching]      = useState(false);
-  // Incremented whenever the user saves a profile change so AnalyticsPage re-fetches
-  const [profileVersion, setProfileVersion] = useState(0);
-
   const [chatOpen,      setChatOpen]      = useState(false);
   const [profileOpen,   setProfileOpen]   = useState(false);
   const [weightOpen,    setWeightOpen]    = useState(false);
@@ -160,15 +157,13 @@ export default function Dashboard() {
 
   // ProfilePanel calls this after a successful profile edit
   async function handleProfileSaved() {
+    // fetchUserProfile updates userProfile state, which AnalyticsPage watches as a dep
     await Promise.all([fetchUserProfile(), fetchProgressData()]);
-    // Bump version so AnalyticsPage re-fetches with the updated profile data
-    setProfileVersion(v => v + 1);
   }
 
-  // GoalInfoBar calls this after updating the calorie offset (fix #1)
+  // GoalInfoBar calls this after updating the calorie offset
   async function handleOffsetSaved() {
     await Promise.all([fetchProgressData(), fetchUserProfile()]);
-    setProfileVersion(v => v + 1);
   }
 
   // WeightLogModal calls this after a successful save
@@ -352,9 +347,9 @@ export default function Dashboard() {
           )
         )}
 
-        {/* Analytics tab */}
+        {/* Analytics tab — userProfile passed so field changes trigger re-fetch */}
         {activeTab === 'analytics' && (
-          <AnalyticsPage profileVersion={profileVersion} />
+          <AnalyticsPage userProfile={userProfile} />
         )}
       </main>
 

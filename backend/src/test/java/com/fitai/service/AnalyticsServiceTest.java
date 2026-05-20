@@ -133,35 +133,30 @@ class AnalyticsServiceTest {
     }
 
     @Test
-    void predict_noDaysLogged_returnsZeroChange() {
+    void predict_cuttingGoal_usesCalorieOffset() {
+        // Profile: cutting, offset=500, weight=80 kg (from setUp)
         when(userProfileRepository.findByUserId("user1")).thenReturn(Optional.of(profile));
-        when(progressService.computeTdee(profile)).thenReturn(2200);
-        // No applyGoalOffset stub — predict() uses TDEE directly, not dailyTarget
-        when(mealEntryRepository.sumAllCaloriesByUserId("user1")).thenReturn(null);
-        when(mealEntryRepository.countDistinctDatesWithEntries("user1")).thenReturn(0L);
         when(weightLogRepository.findByUserIdOrderByLoggedAtAsc("user1")).thenReturn(List.of());
 
         PredictResponse result = service.predict("user1", 30);
 
-        assertThat(result.getEstimatedChangeKg()).isEqualByComparingTo("0.00");
+        // 500 kcal/day deficit × 30 days / 7700 ≈ 1.95 kg loss
+        assertThat(result.getEstimatedChangeKg()).isEqualByComparingTo("-1.95");
         assertThat(result.getCurrentWeight()).isEqualByComparingTo("80.0");
+        assertThat(result.getDailyDeficitUsed()).isEqualTo(500);
         assertThat(result.getProjectionPoints()).hasSize(31); // day 0 through day 30
         assertThat(result.getGoal()).isEqualTo("cutting");
     }
 
     @Test
     void predict_maintenanceGoal_alwaysReturnsZeroChange() {
-        // Maintenance goal → flat line regardless of calorie history
+        // Maintenance goal → flat line regardless of offset value
         UserProfile maintenanceProfile = new UserProfile();
         maintenanceProfile.setUserId("user1");
         maintenanceProfile.setWeightKg(BigDecimal.valueOf(80.0));
         maintenanceProfile.setGoal("maintenance");
-        maintenanceProfile.setCalorieTargetOffset(500); // offset irrelevant for maintenance
+        maintenanceProfile.setCalorieTargetOffset(500); // offset is ignored for maintenance
         when(userProfileRepository.findByUserId("user1")).thenReturn(Optional.of(maintenanceProfile));
-        when(progressService.computeTdee(maintenanceProfile)).thenReturn(2200);
-        // Has calorie history that would imply a deficit if goal weren't maintenance
-        when(mealEntryRepository.sumAllCaloriesByUserId("user1")).thenReturn(BigDecimal.valueOf(12000));
-        when(mealEntryRepository.countDistinctDatesWithEntries("user1")).thenReturn(10L);
         when(weightLogRepository.findByUserIdOrderByLoggedAtAsc("user1")).thenReturn(List.of());
 
         PredictResponse result = service.predict("user1", 30);
@@ -180,18 +175,13 @@ class AnalyticsServiceTest {
 
     @Test
     void predict_consistentDeficit_estimatesWeightLoss() {
+        // Profile: cutting, offset=500 → prediction is offset-based, not history-based
         when(userProfileRepository.findByUserId("user1")).thenReturn(Optional.of(profile));
-        when(progressService.computeTdee(profile)).thenReturn(2200);
-        // No applyGoalOffset stub — predict() uses TDEE directly
-
-        // Ate 1200 kcal/day for 10 days → deficit vs TDEE = 2200−1200 = 1000 kcal/day
-        when(mealEntryRepository.sumAllCaloriesByUserId("user1")).thenReturn(BigDecimal.valueOf(12000));
-        when(mealEntryRepository.countDistinctDatesWithEntries("user1")).thenReturn(10L);
         when(weightLogRepository.findByUserIdOrderByLoggedAtAsc("user1")).thenReturn(List.of());
 
         PredictResponse result = service.predict("user1", 30);
 
-        // 1000 kcal/day deficit × 30 days / 7700 ≈ 3.9 kg loss
+        // 500 kcal/day offset × 30 days / 7700 ≈ 1.95 kg loss
         assertThat(result.getEstimatedChangeKg().doubleValue()).isLessThan(0);
         assertThat(result.getAverageDailyDeficit().doubleValue()).isGreaterThan(0);
         assertThat(result.getProjectionPoints()).hasSize(31);
@@ -201,10 +191,6 @@ class AnalyticsServiceTest {
     @Test
     void predict_projectionPointsHaveActualValueForTodayOnly() {
         when(userProfileRepository.findByUserId("user1")).thenReturn(Optional.of(profile));
-        when(progressService.computeTdee(profile)).thenReturn(2200);
-        // No applyGoalOffset stub — predict() uses TDEE directly
-        when(mealEntryRepository.sumAllCaloriesByUserId("user1")).thenReturn(BigDecimal.valueOf(1700));
-        when(mealEntryRepository.countDistinctDatesWithEntries("user1")).thenReturn(1L);
 
         // One actual log for today
         WeightLog todayLog = new WeightLog();
