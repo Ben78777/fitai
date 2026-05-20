@@ -80,6 +80,10 @@ export default function Dashboard() {
   const [userProfile,   setUserProfile]   = useState<UserProfile | null>(null);
   const [initialLoad,   setInitialLoad]   = useState(true);
   const [fetching,      setFetching]      = useState(false);
+  // Bumped on every profile save; used as `key` on AnalyticsPage to force a full remount,
+  // which is the only approach guaranteed to re-fetch with fresh data regardless of dep arrays.
+  const [profileVersion, setProfileVersion] = useState(0);
+
   const [chatOpen,      setChatOpen]      = useState(false);
   const [profileOpen,   setProfileOpen]   = useState(false);
   const [weightOpen,    setWeightOpen]    = useState(false);
@@ -157,13 +161,14 @@ export default function Dashboard() {
 
   // ProfilePanel calls this after a successful profile edit
   async function handleProfileSaved() {
-    // fetchUserProfile updates userProfile state, which AnalyticsPage watches as a dep
     await Promise.all([fetchUserProfile(), fetchProgressData()]);
+    setProfileVersion(v => v + 1); // increment → key change → AnalyticsPage remounts
   }
 
   // GoalInfoBar calls this after updating the calorie offset
   async function handleOffsetSaved() {
     await Promise.all([fetchProgressData(), fetchUserProfile()]);
+    setProfileVersion(v => v + 1);
   }
 
   // WeightLogModal calls this after a successful save
@@ -347,9 +352,14 @@ export default function Dashboard() {
           )
         )}
 
-        {/* Analytics tab — userProfile passed so field changes trigger re-fetch */}
+        {/* Analytics tab — key={profileVersion} forces full remount on every profile save,
+             guaranteeing fresh data regardless of React's dep-array optimisations. */}
         {activeTab === 'analytics' && (
-          <AnalyticsPage userProfile={userProfile} />
+          <AnalyticsPage
+            key={profileVersion}
+            userProfile={userProfile}
+            progressData={progressData}
+          />
         )}
       </main>
 
