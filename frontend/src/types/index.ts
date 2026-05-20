@@ -140,6 +140,7 @@ export interface PredictResponse {
   averageDailyDeficit: number; // positive = deficit, negative = surplus
   projectionDays: number;
   projectionPoints: ProjectionPoint[];
+  goal: string;                // "cutting" | "bulking" | "maintenance"
 }
 
 export interface CreateLogEntryPayload {

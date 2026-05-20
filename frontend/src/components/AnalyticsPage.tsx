@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine,
@@ -166,13 +166,36 @@ function PredictionChart({ prediction }: { prediction: PredictResponse }) {
   const allWeights = chartData.flatMap(d =>
     [d.Actual, d.Predicted].filter((v): v is number => v != null)
   );
-  const minW = Math.floor(Math.min(...allWeights) - 0.5);
-  const maxW = Math.ceil(Math.max(...allWeights)  + 0.5);
+  // Guard against a flat maintenance line where min===max, which would collapse the Y axis
+  const rawMin = Math.min(...allWeights);
+  const rawMax = Math.max(...allWeights);
+  const minW = Math.floor(rawMin - (rawMin === rawMax ? 1 : 0.5));
+  const maxW = Math.ceil( rawMax + (rawMin === rawMax ? 1 : 0.5));
 
-  const changeKg   = Number(prediction.estimatedChangeKg);
-  const changeSign = changeKg < 0 ? '−' : '+';
-  const changeAbs  = Math.abs(changeKg).toFixed(2);
-  const changeColor = changeKg <= 0 ? 'text-green-600' : 'text-orange-500';
+  // Goal-aware summary text
+  const changeKg  = Number(prediction.estimatedChangeKg);
+  const changeAbs = Math.abs(changeKg).toFixed(2);
+  let changeSummary: React.ReactNode;
+  if (prediction.goal === 'maintenance') {
+    changeSummary = (
+      <span className="font-semibold text-blue-600">
+        Eating at maintenance — no weight change predicted
+      </span>
+    );
+  } else if (prediction.goal === 'cutting') {
+    changeSummary = (
+      <span className="font-semibold text-green-600">
+        Estimated loss: {changeAbs} kg
+      </span>
+    );
+  } else {
+    // bulking
+    changeSummary = (
+      <span className="font-semibold text-orange-500">
+        Estimated gain: {changeAbs} kg
+      </span>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -181,13 +204,13 @@ function PredictionChart({ prediction }: { prediction: PredictResponse }) {
         <span>
           Current: <strong className="text-gray-900">{Number(prediction.currentWeight).toFixed(1)} kg</strong>
         </span>
-        <span>
-          In {prediction.projectionDays}d:{' '}
-          <strong className="text-gray-900">{Number(prediction.predictedWeight).toFixed(1)} kg</strong>
-        </span>
-        <span className={`font-semibold ${changeColor}`}>
-          {changeSign}{changeAbs} kg predicted
-        </span>
+        {prediction.goal !== 'maintenance' && (
+          <span>
+            In {prediction.projectionDays}d:{' '}
+            <strong className="text-gray-900">{Number(prediction.predictedWeight).toFixed(1)} kg</strong>
+          </span>
+        )}
+        {changeSummary}
       </div>
 
       <ResponsiveContainer width="100%" height={220}>

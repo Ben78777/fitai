@@ -123,14 +123,21 @@ public class AnalyticsService {
         double totalCaloriesEaten = rawTotal != null ? rawTotal.doubleValue() : 0.0;
         long daysLogged = mealEntryRepository.countDistinctDatesWithEntries(userId);
 
-        // Average daily deficit (positive = eating less than TDEE = losing weight)
-        double avgDailyDeficit = daysLogged > 0
-                ? (((double) tdee * daysLogged) - totalCaloriesEaten) / daysLogged
-                : 0.0;
-
-        // A positive deficit (eating less than target) means weight goes DOWN,
-        // so negate: changePerDay < 0 = weight loss, > 0 = weight gain
-        double changePerDay = -avgDailyDeficit / 7700.0;
+        // Maintenance goal means eating at TDEE by intent — no weight change predicted
+        // regardless of historical calorie logs (those may reflect a different past goal).
+        final double avgDailyDeficit;
+        final double changePerDay;
+        if ("maintenance".equals(profile.getGoal())) {
+            avgDailyDeficit = 0.0;
+            changePerDay    = 0.0;
+        } else {
+            // Average daily deficit (positive = eating less than TDEE = losing weight)
+            avgDailyDeficit = daysLogged > 0
+                    ? (((double) tdee * daysLogged) - totalCaloriesEaten) / daysLogged
+                    : 0.0;
+            // Positive deficit → weight goes DOWN → negate for changePerDay
+            changePerDay = -avgDailyDeficit / 7700.0;
+        }
 
         BigDecimal currentWeight = profile.getWeightKg();
         double current = currentWeight.doubleValue();
@@ -171,6 +178,7 @@ public class AnalyticsService {
         response.setAverageDailyDeficit(BigDecimal.valueOf(avgDailyDeficit).setScale(1, RoundingMode.HALF_UP));
         response.setProjectionDays(projectionDays);
         response.setProjectionPoints(points);
+        response.setGoal(profile.getGoal());
         return response;
     }
 

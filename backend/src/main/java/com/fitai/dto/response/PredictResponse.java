@@ -12,6 +12,7 @@ public class PredictResponse {
     private BigDecimal averageDailyDeficit;   // positive = surplus, negative = deficit
     private int projectionDays;
     private List<ProjectionPoint> projectionPoints;
+    private String goal;                      // "cutting" | "bulking" | "maintenance"
 
     public PredictResponse() {}
 
@@ -32,6 +33,9 @@ public class PredictResponse {
 
     public List<ProjectionPoint> getProjectionPoints() { return projectionPoints; }
     public void setProjectionPoints(List<ProjectionPoint> projectionPoints) { this.projectionPoints = projectionPoints; }
+
+    public String getGoal() { return goal; }
+    public void setGoal(String goal) { this.goal = goal; }
 
     // ── Inner: one point on the prediction chart ──────────────────────────────
     public static class ProjectionPoint {

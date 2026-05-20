@@ -146,6 +146,36 @@ class AnalyticsServiceTest {
         assertThat(result.getEstimatedChangeKg()).isEqualByComparingTo("0.00");
         assertThat(result.getCurrentWeight()).isEqualByComparingTo("80.0");
         assertThat(result.getProjectionPoints()).hasSize(31); // day 0 through day 30
+        assertThat(result.getGoal()).isEqualTo("cutting");
+    }
+
+    @Test
+    void predict_maintenanceGoal_alwaysReturnsZeroChange() {
+        // Maintenance goal → flat line regardless of calorie history
+        UserProfile maintenanceProfile = new UserProfile();
+        maintenanceProfile.setUserId("user1");
+        maintenanceProfile.setWeightKg(BigDecimal.valueOf(80.0));
+        maintenanceProfile.setGoal("maintenance");
+        maintenanceProfile.setCalorieTargetOffset(500); // offset irrelevant for maintenance
+        when(userProfileRepository.findByUserId("user1")).thenReturn(Optional.of(maintenanceProfile));
+        when(progressService.computeTdee(maintenanceProfile)).thenReturn(2200);
+        // Has calorie history that would imply a deficit if goal weren't maintenance
+        when(mealEntryRepository.sumAllCaloriesByUserId("user1")).thenReturn(BigDecimal.valueOf(12000));
+        when(mealEntryRepository.countDistinctDatesWithEntries("user1")).thenReturn(10L);
+        when(weightLogRepository.findByUserIdOrderByLoggedAtAsc("user1")).thenReturn(List.of());
+
+        PredictResponse result = service.predict("user1", 30);
+
+        // No change regardless of eating history
+        assertThat(result.getEstimatedChangeKg()).isEqualByComparingTo("0.00");
+        assertThat(result.getAverageDailyDeficit()).isEqualByComparingTo("0.0");
+        assertThat(result.getPredictedWeight()).isEqualByComparingTo("80.0");
+        assertThat(result.getGoal()).isEqualTo("maintenance");
+        // All predicted points should be at current weight
+        assertThat(result.getProjectionPoints()).hasSize(31);
+        result.getProjectionPoints().forEach(p ->
+            assertThat(p.getPredicted()).isEqualByComparingTo("80.00")
+        );
     }
 
     @Test
@@ -161,10 +191,11 @@ class AnalyticsServiceTest {
 
         PredictResponse result = service.predict("user1", 30);
 
-        // 500 kcal/day deficit × 30 days / 7700 ≈ 1.95 kg loss
+        // 1000 kcal/day deficit × 30 days / 7700 ≈ 3.9 kg loss
         assertThat(result.getEstimatedChangeKg().doubleValue()).isLessThan(0);
         assertThat(result.getAverageDailyDeficit().doubleValue()).isGreaterThan(0);
         assertThat(result.getProjectionPoints()).hasSize(31);
+        assertThat(result.getGoal()).isEqualTo("cutting");
     }
 
     @Test
