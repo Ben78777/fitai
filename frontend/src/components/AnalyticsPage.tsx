@@ -5,7 +5,7 @@ import {
   ComposedChart,
 } from 'recharts';
 import { getAnalytics, postPredict } from '../lib/api';
-import type { AnalyticsData, PredictResponse, ProgressData, UserProfile } from '../types';
+import type { AnalyticsData, PredictResponse, ProgressData } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -325,13 +325,11 @@ function StatsStrip({ progressData }: { progressData: ProgressData }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface Props {
-  /** Full profile — its key primitive fields are watched as fetchAnalytics deps. */
-  userProfile:  UserProfile | null;
   /** Progress data — provides TDEE and target for the stats strip. */
   progressData: ProgressData | null;
 }
 
-export default function AnalyticsPage({ userProfile, progressData }: Props) {
+export default function AnalyticsPage({ progressData }: Props) {
   // ── Analytics (chart history) ─────────────────────────────────────────────
   const [filter,    setFilter]    = useState<DayFilter>(30);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);

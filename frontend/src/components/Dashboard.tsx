@@ -357,7 +357,6 @@ export default function Dashboard() {
         {activeTab === 'analytics' && (
           <AnalyticsPage
             key={profileVersion}
-            userProfile={userProfile}
             progressData={progressData}
           />
         )}
