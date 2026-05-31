@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { createProfile } from '../lib/api';
+import { supabase } from '../lib/supabase';
 
 interface Props {
   onComplete: () => void;
@@ -232,6 +233,15 @@ export default function Onboarding({ onComplete }: Props) {
             className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-60 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
           >
             {loading ? 'Saving…' : 'Get started →'}
+          </button>
+
+          {/* Escape hatch — sign out and return to the login screen */}
+          <button
+            type="button"
+            onClick={() => supabase.auth.signOut()}
+            className="w-full text-sm text-gray-400 hover:text-gray-600 py-1 transition-colors"
+          >
+            ← Back to Login
           </button>
         </form>
       </div>
